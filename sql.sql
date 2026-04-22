@@ -93,6 +93,7 @@ CREATE TABLE topics (
 CREATE TABLE questions (
                            id INT AUTO_INCREMENT PRIMARY KEY,
                            content TEXT,
+                           url VARCHAR(500),
                            type ENUM('MCQ','ESSAY'),
                            difficulty ENUM('EASY','MEDIUM','HARD'),
                            topic_id INT,

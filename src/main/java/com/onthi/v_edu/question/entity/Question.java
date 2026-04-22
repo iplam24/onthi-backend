@@ -32,6 +32,8 @@ public class Question {
     private Integer id;
     @Lob
     private String content;
+    @Column(length = 500)
+    private String url;
     @Enumerated(EnumType.STRING)
     private QuestionType type;
     @Enumerated(EnumType.STRING)

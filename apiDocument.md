@@ -628,6 +628,7 @@ This document provides a comprehensive overview of all the APIs available in the
           {
             "id": 1,
             "content": "Câu hỏi 1?",
+              "url": "https://cdn.example.com/questions/q1.png",
             "type": "MCQ",
             "difficulty": "EASY",
             "topicId": 1,
@@ -645,6 +646,7 @@ This document provides a comprehensive overview of all the APIs available in the
           {
             "id": 2,
             "content": "Câu hỏi 2?",
+              "url": null,
             "type": "ESSAY",
             "difficulty": "MEDIUM",
             "topicId": 2,
@@ -679,6 +681,7 @@ This document provides a comprehensive overview of all the APIs available in the
     ```json
     {
       "content": "Câu hỏi 3?",
+      "url": "https://cdn.example.com/questions/q3.png",
       "topicId": 1,
       "options": [
         { "content": "Đáp án A", "isCorrect": false },
@@ -696,6 +699,7 @@ This document provides a comprehensive overview of all the APIs available in the
       "data": {
         "id": 3,
         "content": "Câu hỏi 3?",
+        "url": "https://cdn.example.com/questions/q3.png",
         "topicId": 1
       }
     }

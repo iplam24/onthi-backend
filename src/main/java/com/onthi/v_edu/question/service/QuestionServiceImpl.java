@@ -92,6 +92,7 @@ public class QuestionServiceImpl implements QuestionService {
 
 		Question question = new Question();
 		question.setContent(normalize(request.getContent()));
+		question.setUrl(normalize(request.getUrl()));
 		question.setType(request.getType());
 		question.setDifficulty(request.getDifficulty());
 		question.setTopic(topic);
@@ -121,6 +122,7 @@ public class QuestionServiceImpl implements QuestionService {
 		}
 
 		question.setContent(normalize(request.getContent()));
+		question.setUrl(normalize(request.getUrl()));
 		question.setType(request.getType());
 		question.setDifficulty(request.getDifficulty());
 		question.setTopic(topic);
@@ -226,6 +228,7 @@ public class QuestionServiceImpl implements QuestionService {
 		return new QuestionResponse(
 				questionId,
 				question.getContent(),
+				question.getUrl(),
 				question.getType(),
 				question.getDifficulty(),
 				topicId,

@@ -16,6 +16,8 @@ public class QuestionRequest {
 	@NotBlank
 	private String content;
 
+	private String url;
+
 	@NotNull
 	private QuestionType type;
 

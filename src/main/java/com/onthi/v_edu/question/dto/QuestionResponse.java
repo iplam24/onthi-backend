@@ -17,6 +17,7 @@ import java.util.List;
 public class QuestionResponse {
 	private Integer id;
 	private String content;
+	private String url;
 	private QuestionType type;
 	private DifficultyLevel difficulty;
 	private Integer topicId;
