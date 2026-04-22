@@ -178,7 +178,6 @@ public class QuestionServiceImpl implements QuestionService {
 		Explanation explanation = explanationRepository.findByQuestionId(questionId).orElse(null);
 		if (explanation == null) {
 			explanation = new Explanation();
-			explanation.setQuestionId(questionId);
 			explanation.setQuestion(question);
 			explanation.setCreatedAt(LocalDateTime.now());
 		}

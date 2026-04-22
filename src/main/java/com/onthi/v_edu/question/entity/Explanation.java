@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -23,6 +24,7 @@ public class Explanation {
     @Column(name = "question_id")
     private Integer questionId;
     @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
     @JoinColumn(name = "question_id")
     private Question question;
     @Lob

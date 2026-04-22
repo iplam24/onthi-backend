@@ -329,7 +329,87 @@ This document provides a comprehensive overview of all the APIs available in the
 
 **Controller:** `LearningController.java`
 
-### 4.1 Get All Subjects
+### 4.1 Levels API
+
+*   **Method:** `GET`
+*   **Path:** `/api/learning/levels`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Lấy danh sách level thành công!",
+      "data": [
+        { "id": 1, "name": "Lớp 10" },
+        { "id": 2, "name": "Lớp 11" }
+      ]
+    }
+    ```
+
+*   **Method:** `GET`
+*   **Path:** `/api/learning/levels/{id}`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Lấy level thành công!",
+      "data": { "id": 1, "name": "Lớp 10" }
+    }
+    ```
+
+*   **Method:** `POST`
+*   **Path:** `/api/learning/levels`
+*   **Authorization:** `ADMIN`
+*   **Request Body:**
+
+    ```json
+    { "name": "Lớp 12" }
+    ```
+
+*   **Success Response (201 Created):**
+
+    ```json
+    {
+      "status": 201,
+      "message": "Tạo level thành công!",
+      "data": { "id": 3, "name": "Lớp 12" }
+    }
+    ```
+
+*   **Method:** `PUT`
+*   **Path:** `/api/learning/levels/{id}`
+*   **Authorization:** `ADMIN`
+*   **Request Body:**
+
+    ```json
+    { "name": "Lớp 12 nâng cao" }
+    ```
+
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Cập nhật level thành công!",
+      "data": { "id": 3, "name": "Lớp 12 nâng cao" }
+    }
+    ```
+
+*   **Method:** `DELETE`
+*   **Path:** `/api/learning/levels/{id}`
+*   **Authorization:** `ADMIN`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Xoá level thành công!",
+      "data": null
+    }
+    ```
+
+### 4.2 Subjects API
 
 *   **Method:** `GET`
 *   **Path:** `/api/learning/subjects`
@@ -338,24 +418,33 @@ This document provides a comprehensive overview of all the APIs available in the
     ```json
     {
       "status": 200,
-      "message": "Lấy danh sách môn học thành công!",
+      "message": "Lấy danh sách subject thành công!",
       "data": [
-        { "id": 1, "name": "Toán" },
-        { "id": 2, "name": "Vật Lý" }
+        { "id": 1, "name": "Toán", "levelId": 1, "levelName": "Lớp 10" },
+        { "id": 2, "name": "Vật Lý", "levelId": 2, "levelName": "Lớp 11" }
       ]
     }
     ```
 
-### 4.2 Create Subject
-
-*   **Method:** `POST`
-*   **Path:** `/api/learning/subjects`
-*   **Request Body:**
+*   **Method:** `GET`
+*   **Path:** `/api/learning/subjects/{id}`
+*   **Success Response (200 OK):**
 
     ```json
     {
-      "name": "Hóa Học"
+      "status": 200,
+      "message": "Lấy subject thành công!",
+      "data": { "id": 1, "name": "Toán", "levelId": 1, "levelName": "Lớp 10" }
     }
+    ```
+
+*   **Method:** `POST`
+*   **Path:** `/api/learning/subjects`
+*   **Authorization:** `ADMIN`
+*   **Request Body:**
+
+    ```json
+    { "name": "Hóa Học", "levelId": 2 }
     ```
 
 *   **Success Response (201 Created):**
@@ -363,13 +452,156 @@ This document provides a comprehensive overview of all the APIs available in the
     ```json
     {
       "status": 201,
-      "message": "Tạo môn học thành công!",
+      "message": "Tạo subject thành công!",
+      "data": { "id": 3, "name": "Hóa Học", "levelId": 2, "levelName": "Lớp 11" }
+    }
+    ```
+
+*   **Method:** `PUT`
+*   **Path:** `/api/learning/subjects/{id}`
+*   **Authorization:** `ADMIN`
+*   **Request Body:**
+
+    ```json
+    { "name": "Hóa Học nâng cao", "levelId": 2 }
+    ```
+
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Cập nhật subject thành công!",
+      "data": { "id": 3, "name": "Hóa Học nâng cao", "levelId": 2, "levelName": "Lớp 11" }
+    }
+    ```
+
+*   **Method:** `DELETE`
+*   **Path:** `/api/learning/subjects/{id}`
+*   **Authorization:** `ADMIN`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Xoá subject thành công!",
+      "data": null
+    }
+    ```
+
+### 4.3 Topics API
+
+*   **Method:** `GET`
+*   **Path:** `/api/learning/topics`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Lấy danh sách topic thành công!",
+      "data": [
+        {
+          "id": 1,
+          "name": "Hàm số",
+          "subjectId": 1,
+          "subjectName": "Toán",
+          "levelId": 1,
+          "levelName": "Lớp 10"
+        }
+      ]
+    }
+    ```
+
+*   **Method:** `GET`
+*   **Path:** `/api/learning/topics/{id}`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Lấy topic thành công!",
       "data": {
-        "id": 3,
-        "name": "Hóa Học"
+        "id": 1,
+        "name": "Hàm số",
+        "subjectId": 1,
+        "subjectName": "Toán",
+        "levelId": 1,
+        "levelName": "Lớp 10"
       }
     }
     ```
+
+*   **Method:** `POST`
+*   **Path:** `/api/learning/topics`
+*   **Authorization:** `ADMIN`
+*   **Request Body:**
+
+    ```json
+    { "name": "Hàm số bậc hai", "subjectId": 1 }
+    ```
+
+*   **Success Response (201 Created):**
+
+    ```json
+    {
+      "status": 201,
+      "message": "Tạo topic thành công!",
+      "data": {
+        "id": 2,
+        "name": "Hàm số bậc hai",
+        "subjectId": 1,
+        "subjectName": "Toán",
+        "levelId": 1,
+        "levelName": "Lớp 10"
+      }
+    }
+    ```
+
+*   **Method:** `PUT`
+*   **Path:** `/api/learning/topics/{id}`
+*   **Authorization:** `ADMIN`
+*   **Request Body:**
+
+    ```json
+    { "name": "Hàm số nâng cao", "subjectId": 1 }
+    ```
+
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Cập nhật topic thành công!",
+      "data": {
+        "id": 2,
+        "name": "Hàm số nâng cao",
+        "subjectId": 1,
+        "subjectName": "Toán",
+        "levelId": 1,
+        "levelName": "Lớp 10"
+      }
+    }
+    ```
+
+*   **Method:** `DELETE`
+*   **Path:** `/api/learning/topics/{id}`
+*   **Authorization:** `ADMIN`
+*   **Success Response (200 OK):**
+
+    ```json
+    {
+      "status": 200,
+      "message": "Xoá topic thành công!",
+      "data": null
+    }
+    ```
+
+### Notes
+
+*   Các API ghi dữ liệu trong `LearningController` yêu cầu quyền `ADMIN`.
+*   Các response lỗi thường gặp:
+    *   `404 Not Found` khi không tìm thấy `level`, `subject`, hoặc `topic`.
+    *   `400 Bad Request` khi tên đã tồn tại hoặc dữ liệu đang được sử dụng nên không thể xoá.
 
 ---
 
