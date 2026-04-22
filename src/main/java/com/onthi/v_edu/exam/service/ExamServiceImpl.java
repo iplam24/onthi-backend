@@ -1,6 +1,7 @@
 package com.onthi.v_edu.exam.service;
 
 import com.onthi.v_edu.common.dto.ApiResponse;
+import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.config.security.services.UserDetailsImpl;
 import com.onthi.v_edu.exam.dto.ExamQuestionItemRequest;
 import com.onthi.v_edu.exam.dto.ExamQuestionItemResponse;
@@ -17,7 +18,8 @@ import com.onthi.v_edu.question.entity.Question;
 import com.onthi.v_edu.question.repository.QuestionRepository;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -54,24 +56,22 @@ public class ExamServiceImpl implements ExamService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public ApiResponse<List<ExamResponse>> getAllExams() {
-		List<ExamResponse> data = examRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).stream()
-				.map(this::toExamResponse)
-				.toList();
-		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi thành công!", data);
+	public ApiResponse<PageResponse<ExamResponse>> getAllExams(Pageable pageable) {
+		Page<ExamResponse> data = examRepository.findAll(pageable)
+				.map(this::toExamResponse);
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi thành công!", PageResponse.from(data));
 	}
 
 	@Override
 	@Transactional(readOnly = true)
-	public ApiResponse<List<ExamResponse>> getExamsBySubjectId(Integer subjectId) {
+	public ApiResponse<PageResponse<ExamResponse>> getExamsBySubjectId(Integer subjectId, Pageable pageable) {
 		if (!subjectRepository.existsById(subjectId)) {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy subject!");
 		}
 
-		List<ExamResponse> data = examRepository.findBySubject_IdOrderByIdDesc(subjectId).stream()
-				.map(this::toExamResponse)
-				.toList();
-		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi theo môn học thành công!", data);
+		Page<ExamResponse> data = examRepository.findBySubject_Id(subjectId, pageable)
+				.map(this::toExamResponse);
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi theo môn học thành công!", PageResponse.from(data));
 	}
 
 	@Override

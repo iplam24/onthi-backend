@@ -1,16 +1,16 @@
 package com.onthi.v_edu.exam.service;
 
 import com.onthi.v_edu.common.dto.ApiResponse;
+import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.exam.dto.ExamRequest;
 import com.onthi.v_edu.exam.dto.ExamResponse;
-
-import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface ExamService {
 
-	ApiResponse<List<ExamResponse>> getAllExams();
+	ApiResponse<PageResponse<ExamResponse>> getAllExams(Pageable pageable);
 
-	ApiResponse<List<ExamResponse>> getExamsBySubjectId(Integer subjectId);
+	ApiResponse<PageResponse<ExamResponse>> getExamsBySubjectId(Integer subjectId, Pageable pageable);
 
 	ApiResponse<ExamResponse> getExamById(Integer id);
 

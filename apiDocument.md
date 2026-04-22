@@ -22,7 +22,7 @@ This document provides a comprehensive overview of all the APIs available in the
     }
     ```
 
-*   **Success Response (200 OK):**
+*   **Success Response (201 Created):**
 
     ```json
     {
@@ -54,7 +54,7 @@ This document provides a comprehensive overview of all the APIs available in the
     }
     ```
 
-*   **Success Response (200 OK):**
+*   **Success Response (201 Created):**
 
     ```json
     {
@@ -187,20 +187,93 @@ This document provides a comprehensive overview of all the APIs available in the
 
 *   **Method:** `GET`
 *   **Path:** `/api/exams`
+*   **Query Parameters:**
+    *   `page` - số trang, mặc định `0`
+    *   `size` - số phần tử mỗi trang, mặc định `10`
+    *   `sort` - tùy chọn, mặc định `id,desc`
 *   **Success Response (200 OK):**
 
     ```json
     {
       "status": 200,
       "message": "Lấy danh sách đề thi thành công!",
-      "data": [
-        { "id": 1, "name": "Đề thi thử THPT Quốc Gia 2024", "subjectId": 1 },
-        { "id": 2, "name": "Đề thi giữa kỳ II - Toán 12", "subjectId": 1 }
-      ]
+      "data": {
+        "items": [
+          {
+            "id": 1,
+            "title": "Đề thi thử THPT Quốc Gia 2024",
+            "subjectId": 1,
+            "subjectName": "Toán",
+            "createdByUsername": "admin",
+            "duration": 90,
+            "isActive": true,
+            "totalScore": 10.0,
+            "type": "MULTIPLE_CHOICE",
+            "shuffleQuestions": true,
+            "shuffleAnswers": true,
+            "maxAttempts": 1,
+            "createdAt": "2026-04-22T10:00:00",
+            "updatedAt": null,
+            "questions": [
+              {
+                "questionId": 101,
+                "content": "Câu 1?",
+                "orderIndex": 1,
+                "score": 1.0,
+                "contentSnapshot": "Câu 1?"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Đề thi giữa kỳ II - Toán 12",
+            "subjectId": 1,
+            "subjectName": "Toán",
+            "createdByUsername": "admin",
+            "duration": 60,
+            "isActive": true,
+            "totalScore": 10.0,
+            "type": "MIXED",
+            "shuffleQuestions": false,
+            "shuffleAnswers": false,
+            "maxAttempts": 2,
+            "createdAt": "2026-04-22T10:10:00",
+            "updatedAt": null,
+            "questions": [
+              {
+                "questionId": 201,
+                "content": "Câu 2?",
+                "orderIndex": 1,
+                "score": 1.0,
+                "contentSnapshot": "Câu 2?"
+              }
+            ]
+          }
+        ],
+        "page": 0,
+        "size": 10,
+        "totalElements": 25,
+        "totalPages": 3,
+        "numberOfElements": 10,
+        "first": true,
+        "last": false,
+        "hasNext": true,
+        "hasPrevious": false
+      }
     }
     ```
 
-### 3.2 Create Exam
+### 3.2 Get Exams By Subject
+
+*   **Method:** `GET`
+*   **Path:** `/api/exams/subjects/{subjectId}`
+*   **Query Parameters:**
+    *   `page` - số trang, mặc định `0`
+    *   `size` - số phần tử mỗi trang, mặc định `10`
+    *   `sort` - tùy chọn, mặc định `id,desc`
+*   **Success Response (200 OK):** tương tự `Get All Exams`, nhưng chỉ chứa các đề thi của môn học được chỉ định.
+
+### 3.3 Create Exam
 
 *   **Method:** `POST`
 *   **Path:** `/api/exams`
@@ -208,9 +281,11 @@ This document provides a comprehensive overview of all the APIs available in the
 
     ```json
     {
-      "name": "Đề thi cuối kỳ I - Lý 12",
+      "title": "Đề thi cuối kỳ I - Lý 12",
       "subjectId": 2,
-      "duration": 90
+      "duration": 90,
+      "isActive": true,
+      "type": "MULTIPLE_CHOICE"
     }
     ```
 
@@ -222,9 +297,28 @@ This document provides a comprehensive overview of all the APIs available in the
       "message": "Tạo đề thi thành công!",
       "data": {
         "id": 3,
-        "name": "Đề thi cuối kỳ I - Lý 12",
+        "title": "Đề thi cuối kỳ I - Lý 12",
         "subjectId": 2,
-        "duration": 90
+        "subjectName": "Vật Lý",
+        "createdByUsername": "admin",
+        "duration": 90,
+        "isActive": true,
+        "totalScore": 10.0,
+        "type": "MULTIPLE_CHOICE",
+        "shuffleQuestions": false,
+        "shuffleAnswers": false,
+        "maxAttempts": 1,
+        "createdAt": "2026-04-22T10:20:00",
+        "updatedAt": null,
+        "questions": [
+          {
+            "questionId": 101,
+            "content": "Câu 1?",
+            "orderIndex": 1,
+            "score": 1.0,
+            "contentSnapshot": "Câu 1?"
+          }
+        ]
       }
     }
     ```
@@ -287,16 +381,60 @@ This document provides a comprehensive overview of all the APIs available in the
 
 *   **Method:** `GET`
 *   **Path:** `/api/questions`
+*   **Query Parameters:**
+    *   `page` - số trang, mặc định `0`
+    *   `size` - số phần tử mỗi trang, mặc định `10`
+    *   `sort` - tùy chọn, mặc định `id,desc`
 *   **Success Response (200 OK):**
 
     ```json
     {
       "status": 200,
       "message": "Lấy danh sách câu hỏi thành công!",
-      "data": [
-        { "id": 1, "content": "Câu hỏi 1?", "topicId": 1 },
-        { "id": 2, "content": "Câu hỏi 2?", "topicId": 2 }
-      ]
+      "data": {
+        "items": [
+          {
+            "id": 1,
+            "content": "Câu hỏi 1?",
+            "type": "MCQ",
+            "difficulty": "EASY",
+            "topicId": 1,
+            "topicName": "Đại số",
+            "createdByUsername": "admin",
+            "createdAt": "2026-04-22T10:00:00",
+            "options": [
+              { "id": 11, "content": "A", "isCorrect": false },
+              { "id": 12, "content": "B", "isCorrect": true }
+            ],
+            "sampleAnswer": null,
+            "explanation": "Giải thích ngắn",
+            "explanationCreatedAt": "2026-04-22T10:05:00"
+          },
+          {
+            "id": 2,
+            "content": "Câu hỏi 2?",
+            "type": "ESSAY",
+            "difficulty": "MEDIUM",
+            "topicId": 2,
+            "topicName": "Hình học",
+            "createdByUsername": "admin",
+            "createdAt": "2026-04-22T10:15:00",
+            "options": [],
+            "sampleAnswer": "Đáp án mẫu",
+            "explanation": null,
+            "explanationCreatedAt": null
+          }
+        ],
+        "page": 0,
+        "size": 10,
+        "totalElements": 42,
+        "totalPages": 5,
+        "numberOfElements": 10,
+        "first": true,
+        "last": false,
+        "hasNext": true,
+        "hasPrevious": false
+      }
     }
     ```
 

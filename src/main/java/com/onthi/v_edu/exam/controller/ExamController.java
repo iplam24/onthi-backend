@@ -4,6 +4,9 @@ import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.exam.dto.ExamRequest;
 import com.onthi.v_edu.exam.service.ExamService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,14 +30,17 @@ public class ExamController {
 	}
 
 	@GetMapping
-	public ResponseEntity<ApiResponse<?>> getAllExams() {
-		ApiResponse<?> response = examService.getAllExams();
+	public ResponseEntity<ApiResponse<?>> getAllExams(
+			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+		ApiResponse<?> response = examService.getAllExams(pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 
 	@GetMapping("/subjects/{subjectId}")
-	public ResponseEntity<ApiResponse<?>> getExamsBySubjectId(@PathVariable Integer subjectId) {
-		ApiResponse<?> response = examService.getExamsBySubjectId(subjectId);
+	public ResponseEntity<ApiResponse<?>> getExamsBySubjectId(
+			@PathVariable Integer subjectId,
+			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+		ApiResponse<?> response = examService.getExamsBySubjectId(subjectId, pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 

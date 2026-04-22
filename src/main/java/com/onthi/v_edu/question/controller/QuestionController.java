@@ -4,6 +4,8 @@ import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.question.dto.QuestionRequest;
 import com.onthi.v_edu.question.service.QuestionService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Sort;
 
 @RestController
 @RequestMapping("/api/questions")
@@ -27,8 +30,9 @@ public class QuestionController {
 	}
 
 	@GetMapping
-	public ResponseEntity<ApiResponse<?>> getAllQuestions() {
-		ApiResponse<?> response = questionService.getAllQuestions();
+	public ResponseEntity<ApiResponse<?>> getAllQuestions(
+			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+		ApiResponse<?> response = questionService.getAllQuestions(pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 

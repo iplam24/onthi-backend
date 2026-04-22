@@ -1,15 +1,15 @@
 package com.onthi.v_edu.question.service;
 
 import com.onthi.v_edu.common.dto.ApiResponse;
+import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.question.dto.QuestionRequest;
 import com.onthi.v_edu.question.dto.QuestionResponse;
-
-import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface QuestionService {
 
 
-	ApiResponse<List<QuestionResponse>> getAllQuestions();
+	ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Pageable pageable);
 
 	ApiResponse<QuestionResponse> getQuestionById(Integer id);
 

@@ -2,6 +2,7 @@ package com.onthi.v_edu.question.service;
 
 import com.onthi.v_edu.common.constant.QuestionType;
 import com.onthi.v_edu.common.dto.ApiResponse;
+import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.config.security.services.UserDetailsImpl;
 import com.onthi.v_edu.learning.entity.Topic;
 import com.onthi.v_edu.learning.repository.TopicRepository;
@@ -19,7 +20,8 @@ import com.onthi.v_edu.question.repository.QuestionOptionRepository;
 import com.onthi.v_edu.question.repository.QuestionRepository;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -57,11 +59,10 @@ public class QuestionServiceImpl implements QuestionService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public ApiResponse<List<QuestionResponse>> getAllQuestions() {
-		List<QuestionResponse> data = questionRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).stream()
-				.map(this::toQuestionResponse)
-				.toList();
-		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách câu hỏi thành công!", data);
+	public ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Pageable pageable) {
+		Page<QuestionResponse> data = questionRepository.findAll(pageable)
+				.map(this::toQuestionResponse);
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách câu hỏi thành công!", PageResponse.from(data));
 	}
 
 	@Override
