@@ -59,8 +59,19 @@ public class QuestionServiceImpl implements QuestionService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Pageable pageable) {
-		Page<QuestionResponse> data = questionRepository.findAll(pageable)
+	public ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Integer subjectId, Integer topicId, Pageable pageable) {
+		Page<Question> questionPage;
+		if (subjectId != null && topicId != null) {
+			questionPage = questionRepository.findByTopic_IdAndTopic_Subject_Id(topicId, subjectId, pageable);
+		} else if (subjectId != null) {
+			questionPage = questionRepository.findByTopic_Subject_Id(subjectId, pageable);
+		} else if (topicId != null) {
+			questionPage = questionRepository.findByTopic_Id(topicId, pageable);
+		} else {
+			questionPage = questionRepository.findAll(pageable);
+		}
+
+		Page<QuestionResponse> data = questionPage
 				.map(this::toQuestionResponse);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách câu hỏi thành công!", PageResponse.from(data));
 	}

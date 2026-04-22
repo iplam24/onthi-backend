@@ -9,7 +9,7 @@ import org.springframework.data.domain.Pageable;
 public interface QuestionService {
 
 
-	ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Pageable pageable);
+	ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Integer subjectId, Integer topicId, Pageable pageable);
 
 	ApiResponse<QuestionResponse> getQuestionById(Integer id);
 

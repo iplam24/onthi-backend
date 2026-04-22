@@ -614,6 +614,8 @@ This document provides a comprehensive overview of all the APIs available in the
 *   **Method:** `GET`
 *   **Path:** `/api/questions`
 *   **Query Parameters:**
+    *   `subjectId` - lọc theo môn học, tùy chọn
+    *   `topicId` - lọc theo chủ đề, tùy chọn
     *   `page` - số trang, mặc định `0`
     *   `size` - số phần tử mỗi trang, mặc định `10`
     *   `sort` - tùy chọn, mặc định `id,desc`
