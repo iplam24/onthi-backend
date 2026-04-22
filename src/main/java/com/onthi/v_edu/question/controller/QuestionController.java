@@ -4,6 +4,7 @@ import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.question.dto.QuestionRequest;
 import com.onthi.v_edu.question.service.QuestionService;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,7 @@ public class QuestionController {
 
 	@GetMapping
 	public ResponseEntity<ApiResponse<?>> getAllQuestions(
+			@ParameterObject
 			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
 		ApiResponse<?> response = questionService.getAllQuestions(pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);

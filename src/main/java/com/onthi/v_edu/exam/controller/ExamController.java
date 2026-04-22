@@ -4,6 +4,7 @@ import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.exam.dto.ExamRequest;
 import com.onthi.v_edu.exam.service.ExamService;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -31,6 +32,7 @@ public class ExamController {
 
 	@GetMapping
 	public ResponseEntity<ApiResponse<?>> getAllExams(
+			@ParameterObject
 			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
 		ApiResponse<?> response = examService.getAllExams(pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);
@@ -39,6 +41,7 @@ public class ExamController {
 	@GetMapping("/subjects/{subjectId}")
 	public ResponseEntity<ApiResponse<?>> getExamsBySubjectId(
 			@PathVariable Integer subjectId,
+			@ParameterObject
 			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
 		ApiResponse<?> response = examService.getExamsBySubjectId(subjectId, pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);
