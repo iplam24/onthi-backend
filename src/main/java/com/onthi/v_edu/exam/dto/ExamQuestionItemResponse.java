@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -15,10 +17,13 @@ public class ExamQuestionItemResponse {
 
     private String questionContent;
 
+    private String url; // Added field for image URL
+
     private Integer orderIndex;
 
     private Double score;
 
     private String contentSnapshot;
-}
 
+    private List<QuestionOptionResponse> options;
+}

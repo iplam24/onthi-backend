@@ -3,6 +3,7 @@ package com.onthi.v_edu.learning.service;
 import com.onthi.v_edu.common.dto.ApiResponse;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+// import org.hibernate.validator.constraints.URL; // Temporarily removed
 
 import java.util.List;
 
@@ -12,9 +13,9 @@ public interface LearningService {
 
 	record LevelResponse(Integer id, String name) {}
 
-	record SubjectRequest(@NotBlank String name, @NotNull Integer levelId) {}
+	record SubjectRequest(@NotBlank String name, /*@URL*/ String imageUrl, @NotNull Integer levelId) {}
 
-	record SubjectResponse(Integer id, String name, Integer levelId, String levelName) {}
+	record SubjectResponse(Integer id, String name, String imageUrl, Integer levelId, String levelName) {}
 
 	record TopicRequest(@NotBlank String name, @NotNull Integer subjectId) {}
 
@@ -40,6 +41,8 @@ public interface LearningService {
 
 	ApiResponse<Void> deleteSubject(Integer id);
 
+
+
 	ApiResponse<List<TopicResponse>> getAllTopics();
 
 	ApiResponse<TopicResponse> getTopicById(Integer id);
@@ -47,6 +50,8 @@ public interface LearningService {
 	ApiResponse<TopicResponse> createTopic(TopicRequest request);
 
 	ApiResponse<TopicResponse> updateTopic(Integer id, TopicRequest request);
+
+
 
 	ApiResponse<Void> deleteTopic(Integer id);
 }

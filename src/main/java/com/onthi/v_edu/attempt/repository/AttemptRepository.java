@@ -2,6 +2,8 @@ package com.onthi.v_edu.attempt.repository;
 
 import com.onthi.v_edu.attempt.entity.Attempt;
 import com.onthi.v_edu.common.constant.AttemptStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -16,5 +18,6 @@ public interface AttemptRepository extends JpaRepository<Attempt, Integer> {
     long countByUser_IdAndExam_Id(Integer userId, Integer examId);
 
     List<Attempt> findByUser_IdOrderByStartedAtDesc(Integer userId);
-}
 
+    Page<Attempt> findByUser_Id(Integer userId, Pageable pageable);
+}

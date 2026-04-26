@@ -148,6 +148,7 @@ public class LearningServiceImpl implements LearningService {
 
 		Subject subject = new Subject();
 		subject.setName(name);
+		subject.setImageUrl(request.imageUrl());
 		subject.setLevel(level);
 		subject = subjectRepository.save(subject);
 
@@ -174,6 +175,7 @@ public class LearningServiceImpl implements LearningService {
 		}
 
 		subject.setName(name);
+		subject.setImageUrl(request.imageUrl());
 		subject.setLevel(level);
 		subject = subjectRepository.save(subject);
 
@@ -293,7 +295,7 @@ public class LearningServiceImpl implements LearningService {
 		Level level = subject.getLevel();
 		Integer levelId = level != null ? level.getId() : null;
 		String levelName = level != null ? level.getName() : null;
-		return new SubjectResponse(subject.getId(), subject.getName(), levelId, levelName);
+		return new SubjectResponse(subject.getId(), subject.getName(), subject.getImageUrl(), levelId, levelName);
 	}
 
 	private TopicResponse toTopicResponse(Topic topic) {

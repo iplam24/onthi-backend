@@ -7,6 +7,7 @@ import com.onthi.v_edu.exam.dto.ExamQuestionItemRequest;
 import com.onthi.v_edu.exam.dto.ExamQuestionItemResponse;
 import com.onthi.v_edu.exam.dto.ExamRequest;
 import com.onthi.v_edu.exam.dto.ExamResponse;
+import com.onthi.v_edu.exam.dto.QuestionOptionResponse;
 import com.onthi.v_edu.exam.entity.Exam;
 import com.onthi.v_edu.exam.entity.ExamQuestion;
 import com.onthi.v_edu.exam.entity.ExamQuestionId;
@@ -15,6 +16,7 @@ import com.onthi.v_edu.exam.repository.ExamRepository;
 import com.onthi.v_edu.learning.entity.Subject;
 import com.onthi.v_edu.learning.repository.SubjectRepository;
 import com.onthi.v_edu.question.entity.Question;
+import com.onthi.v_edu.question.repository.QuestionOptionRepository;
 import com.onthi.v_edu.question.repository.QuestionRepository;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
@@ -31,6 +33,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -41,17 +44,20 @@ public class ExamServiceImpl implements ExamService {
 	private final SubjectRepository subjectRepository;
 	private final QuestionRepository questionRepository;
 	private final UserRepository userRepository;
+	private final QuestionOptionRepository questionOptionRepository;
 
 	public ExamServiceImpl(ExamRepository examRepository,
 						   ExamQuestionRepository examQuestionRepository,
 						   SubjectRepository subjectRepository,
 						   QuestionRepository questionRepository,
-						   UserRepository userRepository) {
+						   UserRepository userRepository,
+						   QuestionOptionRepository questionOptionRepository) {
 		this.examRepository = examRepository;
 		this.examQuestionRepository = examQuestionRepository;
 		this.subjectRepository = subjectRepository;
 		this.questionRepository = questionRepository;
 		this.userRepository = userRepository;
+		this.questionOptionRepository = questionOptionRepository;
 	}
 
 	@Override
@@ -233,13 +239,29 @@ public class ExamServiceImpl implements ExamService {
 		List<ExamQuestionItemResponse> questionItems = examQuestionRepository
 				.findByExam_IdOrderByOrderIndexAscQuestion_IdAsc(exam.getId())
 				.stream()
-				.map(item -> new ExamQuestionItemResponse(
-						item.getQuestion() != null ? item.getQuestion().getId() : null,
-						item.getQuestion() != null ? item.getQuestion().getContent() : null,
-						item.getOrderIndex(),
-						item.getScore(),
-						item.getContentSnapshot()
-				))
+				.map(item -> {
+					Question question = item.getQuestion();
+					if (question == null) {
+						return null;
+					}
+
+					List<QuestionOptionResponse> options = questionOptionRepository
+							.findByQuestion_IdOrderByIdAsc(question.getId())
+							.stream()
+							.map(option -> new QuestionOptionResponse(option.getId(), option.getContent()))
+							.collect(Collectors.toList());
+
+					return new ExamQuestionItemResponse(
+							question.getId(),
+							question.getContent(),
+							question.getUrl(), // Added
+							item.getOrderIndex(),
+							item.getScore(),
+							item.getContentSnapshot(),
+							options
+					);
+				})
+				.filter(java.util.Objects::nonNull)
 				.toList();
 
 		return new ExamResponse(

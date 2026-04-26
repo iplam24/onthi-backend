@@ -24,6 +24,8 @@ public class Subject {
     private Integer id;
     @Column(length = 100)
     private String name;
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "level_id")
     private Level level;

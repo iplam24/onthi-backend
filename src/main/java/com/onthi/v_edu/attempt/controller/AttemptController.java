@@ -2,9 +2,14 @@ package com.onthi.v_edu.attempt.controller;
 
 import com.onthi.v_edu.attempt.dto.AttemptStartRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitRequest;
+import com.onthi.v_edu.attempt.dto.ViolationRecordRequest;
 import com.onthi.v_edu.attempt.service.AttemptService;
 import com.onthi.v_edu.common.dto.ApiResponse;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +43,13 @@ public class AttemptController {
         return ResponseEntity.status(response.getStatus()).body(response);
     }
 
+    @PostMapping("/{attemptId}/violations")
+    public ResponseEntity<ApiResponse<?>> recordViolation(@PathVariable Integer attemptId,
+                                                         @Valid @RequestBody ViolationRecordRequest request) {
+        ApiResponse<?> response = attemptService.recordViolation(attemptId, request);
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+
     @GetMapping("/{attemptId}")
     public ResponseEntity<ApiResponse<?>> getMyAttemptById(@PathVariable Integer attemptId) {
         ApiResponse<?> response = attemptService.getMyAttemptById(attemptId);
@@ -45,9 +57,10 @@ public class AttemptController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<?>> getMyAttempts() {
-        ApiResponse<?> response = attemptService.getMyAttempts();
+    public ResponseEntity<ApiResponse<?>> getMyAttempts(
+            @ParameterObject
+            @PageableDefault(size = 10, sort = "startedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        ApiResponse<?> response = attemptService.getMyAttempts(pageable);
         return ResponseEntity.status(response.getStatus()).body(response);
     }
 }
-

@@ -6,6 +6,8 @@ import com.onthi.v_edu.attempt.dto.AttemptStartRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitAnswerRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSummaryResponse;
+import com.onthi.v_edu.attempt.dto.ViolationRecordRequest;
+import com.onthi.v_edu.attempt.dto.ViolationType;
 import com.onthi.v_edu.attempt.entity.Answer;
 import com.onthi.v_edu.attempt.entity.Attempt;
 import com.onthi.v_edu.attempt.repository.AnswerRepository;
@@ -13,6 +15,7 @@ import com.onthi.v_edu.attempt.repository.AttemptRepository;
 import com.onthi.v_edu.common.constant.AttemptStatus;
 import com.onthi.v_edu.common.constant.QuestionType;
 import com.onthi.v_edu.common.dto.ApiResponse;
+import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.config.security.services.UserDetailsImpl;
 import com.onthi.v_edu.exam.entity.Exam;
 import com.onthi.v_edu.exam.entity.ExamQuestion;
@@ -25,6 +28,8 @@ import com.onthi.v_edu.question.repository.EssayAnswerRepository;
 import com.onthi.v_edu.question.repository.QuestionOptionRepository;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -74,25 +79,36 @@ public class AttemptServiceImpl implements AttemptService {
 
     @Override
     public ApiResponse<AttemptDetailResponse> startAttempt(AttemptStartRequest request) {
+        System.out.println("\n--- [DEBUG] AttemptService.startAttempt ---");
+        System.out.println("Request Body: { examId: " + request.getExamId() + " }");
+
         User currentUser = getCurrentUser();
         if (currentUser == null) {
+            System.out.println("[DEBUG] Lỗi: Người dùng chưa đăng nhập.");
             return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để bắt đầu làm bài!");
         }
+        System.out.println("User: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
 
         Exam exam = examRepository.findById(request.getExamId()).orElse(null);
         if (exam == null) {
+            System.out.println("[DEBUG] Lỗi: Không tìm thấy đề thi với ID: " + request.getExamId());
             return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!");
         }
+        System.out.println("Exam: '" + exam.getTitle() + "' (ID: " + exam.getId() + ")");
 
         String antiCheatError = validateStartConstraints(currentUser, exam);
         if (antiCheatError != null) {
+            System.out.println("[DEBUG] Lỗi validateStartConstraints: " + antiCheatError);
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), antiCheatError);
         }
+        System.out.println("ValidateStartConstraints: OK");
 
         List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdOrderByOrderIndexAscQuestion_IdAsc(exam.getId());
         if (examQuestions.isEmpty()) {
+            System.out.println("[DEBUG] Lỗi: Đề thi không có câu hỏi.");
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đề thi chưa có câu hỏi, không thể bắt đầu!");
         }
+        System.out.println("Số lượng câu hỏi: " + examQuestions.size());
 
         Attempt attempt = new Attempt();
         attempt.setUser(currentUser);
@@ -108,32 +124,44 @@ public class AttemptServiceImpl implements AttemptService {
         attempt.setViolationScore(0);
         attempt.setFlagged(Boolean.FALSE);
         attempt = attemptRepository.save(attempt);
+        System.out.println("Tạo thành công lượt làm bài (Attempt) với ID: " + attempt.getId());
+        System.out.println("--- [DEBUG] Kết thúc startAttempt ---\n");
 
         return new ApiResponse<>(HttpStatus.CREATED.value(), "Bắt đầu làm bài thành công!", toAttemptDetailResponse(attempt));
     }
 
     @Override
     public ApiResponse<AttemptDetailResponse> submitAttempt(Integer attemptId, AttemptSubmitRequest request) {
+        System.out.println("\n--- [DEBUG] AttemptService.submitAttempt ---");
+        System.out.println("Attempt ID: " + attemptId);
+
         User currentUser = getCurrentUser();
         if (currentUser == null) {
+            System.out.println("[DEBUG] Lỗi: Người dùng chưa đăng nhập.");
             return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để nộp bài!");
         }
+        System.out.println("User: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
 
         Attempt attempt = attemptRepository.findByIdAndUser_Id(attemptId, currentUser.getId()).orElse(null);
         if (attempt == null) {
+            System.out.println("[DEBUG] Lỗi: Không tìm thấy lượt làm bài với ID: " + attemptId + " cho user này.");
             return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy lượt làm bài!");
         }
+        System.out.println("Tìm thấy lượt làm bài. Trạng thái hiện tại: " + attempt.getStatus());
 
         if (attempt.getStatus() == AttemptStatus.SUBMITTED) {
+            System.out.println("[DEBUG] Lỗi: Lượt làm bài đã nộp trước đó.");
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Lượt làm bài này đã được nộp trước đó!");
         }
         if (attempt.getStatus() == AttemptStatus.EXPIRED) {
+            System.out.println("[DEBUG] Lỗi: Lượt làm bài đã hết hạn.");
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Lượt làm bài này đã hết hạn!");
         }
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime deadline = calculateDeadline(attempt);
         if (deadline != null && now.isAfter(deadline)) {
+            System.out.println("[DEBUG] Lỗi: Đã hết thời gian làm bài.");
             attempt.setStatus(AttemptStatus.EXPIRED);
             attempt.setExpiredAt(now);
             attempt.setDurationTaken(calculateDurationSeconds(attempt.getStartedAt(), now));
@@ -153,9 +181,11 @@ public class AttemptServiceImpl implements AttemptService {
         List<AttemptSubmitAnswerRequest> submittedAnswers = request.getAnswers() == null
                 ? Collections.emptyList()
                 : request.getAnswers();
+        System.out.println("Số câu trả lời nhận được: " + submittedAnswers.size());
 
         String antiCheatError = validateSubmissionPayload(submittedAnswers, examQuestionMap);
         if (antiCheatError != null) {
+            System.out.println("[DEBUG] Lỗi validateSubmissionPayload: " + antiCheatError);
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), antiCheatError);
         }
 
@@ -166,14 +196,20 @@ public class AttemptServiceImpl implements AttemptService {
         int wrongCount = 0;
         List<Answer> answersToSave = new ArrayList<>();
 
+        System.out.println("\n  [DEBUG] Bắt đầu chấm điểm...");
         for (AttemptSubmitAnswerRequest submitted : submittedAnswers) {
+            System.out.println("  ------------------------------------");
+            System.out.println("  Chấm câu hỏi ID: " + submitted.getQuestionId());
+
             ExamQuestion examQuestion = examQuestionMap.get(submitted.getQuestionId());
             if (examQuestion == null || examQuestion.getQuestion() == null) {
+                System.out.println("  [DEBUG] -> Bỏ qua vì không tìm thấy câu hỏi trong đề thi.");
                 continue;
             }
 
             Question question = examQuestion.getQuestion();
             double questionScore = examQuestion.getScore() == null ? 1d : examQuestion.getScore();
+            System.out.println("  Điểm của câu hỏi: " + questionScore);
 
             Answer answer = new Answer();
             answer.setAttempt(attempt);
@@ -184,10 +220,22 @@ public class AttemptServiceImpl implements AttemptService {
             answer.setUpdatedAt(now);
 
             if (question.getType() == QuestionType.MCQ) {
-                QuestionOption selectedOption = resolveSelectedOption(question.getId(), submitted.getSelectedOptionId());
+                System.out.println("  Loại câu hỏi: MCQ");
+                Integer selectedOptionId = submitted.getSelectedOptionId();
+                System.out.println("  Người dùng chọn option ID: " + selectedOptionId);
+
+                QuestionOption selectedOption = resolveSelectedOption(question.getId(), selectedOptionId);
                 QuestionOption correctOption = questionOptionRepository.findFirstByQuestion_IdAndIsCorrectTrue(question.getId()).orElse(null);
+                
+                if (correctOption == null) {
+                    System.out.println("  [DEBUG] -> Lỗi DB: Không tìm thấy đáp án đúng cho câu hỏi này trong database!");
+                } else {
+                    System.out.println("  Đáp án đúng là option ID: " + correctOption.getId());
+                }
+
                 boolean isCorrect = selectedOption != null && correctOption != null
                         && selectedOption.getId().equals(correctOption.getId());
+                System.out.println("  => Kết quả: " + (isCorrect ? "ĐÚNG" : "SAI"));
 
                 answer.setSelectedOption(selectedOption);
                 answer.setIsCorrect(isCorrect);
@@ -201,6 +249,8 @@ public class AttemptServiceImpl implements AttemptService {
                     wrongCount++;
                 }
             } else {
+                System.out.println("  Loại câu hỏi: ESSAY (Tự luận)");
+                System.out.println("  => Kết quả: Cần chấm thủ công, điểm tạm tính là 0.");
                 EssayAnswer sample = essayAnswerRepository.findByQuestion_Id(question.getId()).orElse(null);
                 answer.setSelectedOption(null);
                 answer.setIsCorrect(null);
@@ -210,8 +260,11 @@ public class AttemptServiceImpl implements AttemptService {
 
             answersToSave.add(answer);
         }
+        System.out.println("  ------------------------------------");
+        System.out.println("  [DEBUG] Chấm điểm hoàn tất.");
 
         answerRepository.saveAll(answersToSave);
+        System.out.println("Lưu " + answersToSave.size() + " câu trả lời vào database.");
 
         int tabSwitchCount = safeNonNegative(request.getTabSwitchCount());
         int violationScore = safeNonNegative(request.getViolationScore());
@@ -228,7 +281,42 @@ public class AttemptServiceImpl implements AttemptService {
         attempt.setFlagged(tabSwitchCount >= TAB_SWITCH_FLAG_THRESHOLD || violationScore >= VIOLATION_SCORE_FLAG_THRESHOLD);
         attemptRepository.save(attempt);
 
+        System.out.println("\nKết quả cuối cùng:");
+        System.out.println("  - Tổng điểm: " + totalScore);
+        System.out.println("  - Số câu đúng: " + correctCount);
+        System.out.println("  - Số câu sai: " + wrongCount);
+        System.out.println("Lưu kết quả vào lượt làm bài ID: " + attempt.getId());
+        System.out.println("--- [DEBUG] Kết thúc submitAttempt ---\n");
+
         return new ApiResponse<>(HttpStatus.OK.value(), "Nộp bài thành công!", toAttemptDetailResponse(attempt));
+    }
+
+    @Override
+    public ApiResponse<AttemptDetailResponse> recordViolation(Integer attemptId, ViolationRecordRequest request) {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập!");
+        }
+
+        Attempt attempt = attemptRepository.findByIdAndUser_Id(attemptId, currentUser.getId()).orElse(null);
+        if (attempt == null) {
+            return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy lượt làm bài!");
+        }
+
+        if (attempt.getStatus() != AttemptStatus.DOING) {
+            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không thể ghi nhận vi phạm cho lượt làm bài đã kết thúc!");
+        }
+
+        if (request.getType() == ViolationType.TAB_SWITCH) {
+            attempt.setTabSwitchCount(attempt.getTabSwitchCount() + 1);
+        }
+
+        if (attempt.getTabSwitchCount() >= TAB_SWITCH_FLAG_THRESHOLD) {
+            attempt.setFlagged(true);
+        }
+
+        attempt = attemptRepository.save(attempt);
+        return new ApiResponse<>(HttpStatus.OK.value(), "Ghi nhận vi phạm thành công!", toAttemptDetailResponse(attempt));
     }
 
     @Override
@@ -249,46 +337,62 @@ public class AttemptServiceImpl implements AttemptService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<List<AttemptSummaryResponse>> getMyAttempts() {
+    public ApiResponse<PageResponse<AttemptSummaryResponse>> getMyAttempts(Pageable pageable) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để xem lịch sử làm bài!");
         }
 
-        List<AttemptSummaryResponse> data = attemptRepository.findByUser_IdOrderByStartedAtDesc(currentUser.getId()).stream()
-                .map(this::toAttemptSummaryResponse)
-                .toList();
+        Page<AttemptSummaryResponse> data = attemptRepository.findByUser_Id(currentUser.getId(), pageable)
+                .map(this::toAttemptSummaryResponse);
 
-        return new ApiResponse<>(HttpStatus.OK.value(), "Lấy lịch sử làm bài thành công!", data);
+        return new ApiResponse<>(HttpStatus.OK.value(), "Lấy lịch sử làm bài thành công!", PageResponse.from(data));
     }
 
     private String validateStartConstraints(User user, Exam exam) {
+        System.out.println("  [DEBUG] Bắt đầu validateStartConstraints...");
         LocalDateTime now = LocalDateTime.now();
+        System.out.println("  [DEBUG] Thời gian hiện tại: " + now);
 
         if (!Boolean.TRUE.equals(exam.getIsActive())) {
+            System.out.println("  [DEBUG] -> Lỗi: Đề thi không active. isActive = " + exam.getIsActive());
             return "Đề thi hiện chưa được mở!";
         }
+        System.out.println("  [DEBUG] -> Check isActive: OK");
 
         if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) {
+            System.out.println("  [DEBUG] -> Lỗi: Chưa đến thời gian làm bài. StartTime = " + exam.getStartTime());
             return "Đề thi chưa đến thời gian bắt đầu!";
         }
+        System.out.println("  [DEBUG] -> Check StartTime: OK");
 
         if (exam.getEndTime() != null && now.isAfter(exam.getEndTime())) {
+            System.out.println("  [DEBUG] -> Lỗi: Đã quá thời gian làm bài. EndTime = " + exam.getEndTime());
             return "Đề thi đã kết thúc!";
         }
+        System.out.println("  [DEBUG] -> Check EndTime: OK");
 
-        if (attemptRepository.existsByUser_IdAndExam_IdAndStatus(user.getId(), exam.getId(), AttemptStatus.DOING)) {
+        boolean hasDoingAttempt = attemptRepository.existsByUser_IdAndExam_IdAndStatus(user.getId(), exam.getId(), AttemptStatus.DOING);
+        if (hasDoingAttempt) {
+            System.out.println("  [DEBUG] -> Lỗi: Tìm thấy một lượt làm bài đang 'DOING'.");
             return "Bạn đang có một lượt làm bài chưa nộp cho đề thi này!";
         }
+        System.out.println("  [DEBUG] -> Check Doing Attempt: OK");
 
         Integer maxAttempts = exam.getMaxAttempts();
         if (maxAttempts != null && maxAttempts > 0) {
             long usedAttempts = attemptRepository.countByUser_IdAndExam_Id(user.getId(), exam.getId());
+            System.out.println("  [DEBUG] -> Check MaxAttempts: max=" + maxAttempts + ", used=" + usedAttempts);
             if (usedAttempts >= maxAttempts) {
+                System.out.println("  [DEBUG] -> Lỗi: Đã hết số lần làm bài.");
                 return "Bạn đã dùng hết số lượt làm bài cho đề thi này!";
             }
+            System.out.println("  [DEBUG] -> Check MaxAttempts: OK");
+        } else {
+            System.out.println("  [DEBUG] -> Check MaxAttempts: Không giới hạn số lần làm.");
         }
 
+        System.out.println("  [DEBUG] Kết thúc validateStartConstraints: Tất cả đều hợp lệ.");
         return null;
     }
 
@@ -388,7 +492,7 @@ public class AttemptServiceImpl implements AttemptService {
     private AttemptDetailResponse toAttemptDetailResponse(Attempt attempt) {
         AttemptSummaryResponse summary = toAttemptSummaryResponse(attempt);
 
-        List<AttemptAnswerResponse> answers = answerRepository.findByAttempt_IdOrderByIdAsc(attempt.getId()).stream()
+        List<AttemptAnswerResponse> answers = answerRepository.findByAttemptIdWithDetails(attempt.getId()).stream()
                 .map(answer -> new AttemptAnswerResponse(
                         answer.getQuestion() != null ? answer.getQuestion().getId() : null,
                         answer.getQuestion() != null ? answer.getQuestion().getContent() : null,
@@ -452,6 +556,3 @@ public class AttemptServiceImpl implements AttemptService {
         return value == null || value.trim().isEmpty();
     }
 }
-
-
-
