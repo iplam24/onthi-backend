@@ -28,6 +28,7 @@ import com.onthi.v_edu.question.repository.EssayAnswerRepository;
 import com.onthi.v_edu.question.repository.QuestionOptionRepository;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
+import com.onthi.v_edu.user.service.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -60,6 +61,7 @@ public class AttemptServiceImpl implements AttemptService {
     private final QuestionOptionRepository questionOptionRepository;
     private final EssayAnswerRepository essayAnswerRepository;
     private final UserRepository userRepository;
+    private final UserService userService;
 
     public AttemptServiceImpl(AttemptRepository attemptRepository,
                               AnswerRepository answerRepository,
@@ -67,7 +69,8 @@ public class AttemptServiceImpl implements AttemptService {
                               ExamQuestionRepository examQuestionRepository,
                               QuestionOptionRepository questionOptionRepository,
                               EssayAnswerRepository essayAnswerRepository,
-                              UserRepository userRepository) {
+                              UserRepository userRepository,
+                              UserService userService) {
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.examRepository = examRepository;
@@ -75,6 +78,7 @@ public class AttemptServiceImpl implements AttemptService {
         this.questionOptionRepository = questionOptionRepository;
         this.essayAnswerRepository = essayAnswerRepository;
         this.userRepository = userRepository;
+        this.userService = userService;
     }
 
     @Override
@@ -280,6 +284,7 @@ public class AttemptServiceImpl implements AttemptService {
         attempt.setViolationScore(violationScore);
         attempt.setFlagged(tabSwitchCount >= TAB_SWITCH_FLAG_THRESHOLD || violationScore >= VIOLATION_SCORE_FLAG_THRESHOLD);
         attemptRepository.save(attempt);
+        userService.recordStudyActivity(currentUser.getId(), now.toLocalDate());
 
         System.out.println("\nKết quả cuối cùng:");
         System.out.println("  - Tổng điểm: " + totalScore);

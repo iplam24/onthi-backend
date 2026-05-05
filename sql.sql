@@ -38,6 +38,16 @@ CREATE TABLE user_information (
                                   FOREIGN KEY (level_id) REFERENCES levels(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE user_study_streaks (
+                                  user_id INT PRIMARY KEY,
+                                  current_streak INT DEFAULT 0,
+                                  longest_streak INT DEFAULT 0,
+                                  last_active_date DATE,
+                                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- ===================== WALLET =====================
 CREATE TABLE wallets (
                          id INT AUTO_INCREMENT PRIMARY KEY,
