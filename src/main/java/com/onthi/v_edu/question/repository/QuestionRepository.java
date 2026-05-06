@@ -6,12 +6,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface QuestionRepository extends JpaRepository<Question, Integer> {
-    long countByTopic_Id(Integer topicId);
+    long countByTopic_IdAndDeletedAtIsNull(Integer topicId);
 
-    Page<Question> findByTopic_Id(Integer topicId, Pageable pageable);
+    Page<Question> findByTopic_IdAndDeletedAtIsNull(Integer topicId, Pageable pageable);
 
-    Page<Question> findByTopic_Subject_Id(Integer subjectId, Pageable pageable);
+    Page<Question> findByTopic_Subject_IdAndDeletedAtIsNull(Integer subjectId, Pageable pageable);
 
-    Page<Question> findByTopic_IdAndTopic_Subject_Id(Integer topicId, Integer subjectId, Pageable pageable);
+    Page<Question> findByTopic_IdAndTopic_Subject_IdAndDeletedAtIsNull(Integer topicId, Integer subjectId, Pageable pageable);
+
+    Page<Question> findByDeletedAtIsNull(Pageable pageable);
+
+    java.util.Optional<Question> findByIdAndDeletedAtIsNull(Integer id);
 }
 

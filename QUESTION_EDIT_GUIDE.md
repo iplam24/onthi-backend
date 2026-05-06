@@ -79,6 +79,27 @@ Lưu ý:
 
 ---
 
+## 2.2) Hiển thị đáp án đẹp
+
+`sampleAnswer` cũng có thể chứa công thức toán, ký hiệu đặc biệt hoặc lời giải ngắn.
+
+### Quy ước khuyến nghị
+- nếu đáp án chỉ là chữ thường → lưu text bình thường
+- nếu đáp án có phân số, số mũ, căn, tích phân, ký hiệu toán → lưu LaTeX raw text
+- frontend render `sampleAnswer` bằng KaTeX hoặc MathJax giống như `content`
+
+### Ví dụ
+```text
+\int_0^1 x^2 \, dx = \frac{1}{3}
+```
+
+### Ghi chú
+- backend không cần tự render
+- không nên HTML-encode công thức toán trước khi lưu
+- nếu đáp án có cả chữ và công thức, nên giữ nguyên nguyên văn để frontend xử lý render
+
+---
+
 ## 3) Rule cập nhật theo loại câu hỏi
 
 ### 3.1 Nếu `type = MCQ`
@@ -105,7 +126,7 @@ Bắt buộc:
 
 Ghi chú:
 - toàn bộ option cũ sẽ bị xoá
-- `sampleAnswer` là đáp án mẫu của câu tự luận
+- `sampleAnswer` là đáp án mẫu của câu tự luận, có thể là text thường hoặc LaTeX
 - `explanation` vẫn được lưu nếu có
 
 ---
@@ -186,6 +207,11 @@ Ghi chú:
 - dropdown chủ đề
 - ô đáp án mẫu
 - ô giải thích
+
+### Quy ước hiển thị đáp án
+- nếu `sampleAnswer` có công thức toán thì frontend render bằng KaTeX/MathJax
+- nếu `sampleAnswer` chỉ là text thường thì hiển thị như text bình thường
+- nên dùng preview để kiểm tra cả câu hỏi lẫn đáp án trước khi lưu
 
 ### Mẹo UI
 - khi chuyển type MCQ <-> ESSAY, nên cảnh báo người dùng rằng dữ liệu con cũ sẽ bị thay thế

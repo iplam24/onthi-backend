@@ -12,8 +12,10 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.SQLDelete;
 @Entity
 @Table(name = "essay_answers")
+@SQLDelete(sql = "UPDATE essay_answers SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,4 +29,7 @@ public class EssayAnswer {
     private Question question;
     @Lob
     private String sampleAnswer;
+
+    @jakarta.persistence.Column(name = "deleted_at")
+    private java.time.LocalDateTime deletedAt;
 }

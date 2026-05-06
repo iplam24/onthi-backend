@@ -63,7 +63,7 @@ public class ExamServiceImpl implements ExamService {
 	@Override
 	@Transactional(readOnly = true)
 	public ApiResponse<PageResponse<ExamResponse>> getAllExams(Pageable pageable) {
-		Page<ExamResponse> data = examRepository.findAll(pageable)
+		Page<ExamResponse> data = examRepository.findByDeletedAtIsNull(pageable)
 				.map(this::toExamResponse);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi thành công!", PageResponse.from(data));
 	}
@@ -75,7 +75,7 @@ public class ExamServiceImpl implements ExamService {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy subject!");
 		}
 
-		Page<ExamResponse> data = examRepository.findBySubject_Id(subjectId, pageable)
+		Page<ExamResponse> data = examRepository.findBySubject_IdAndDeletedAtIsNull(subjectId, pageable)
 				.map(this::toExamResponse);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi theo môn học thành công!", PageResponse.from(data));
 	}
@@ -83,7 +83,7 @@ public class ExamServiceImpl implements ExamService {
 	@Override
 	@Transactional(readOnly = true)
 	public ApiResponse<ExamResponse> getExamById(Integer id) {
-		return examRepository.findById(id)
+		return examRepository.findByIdAndDeletedAtIsNull(id)
 				.map(exam -> new ApiResponse<>(HttpStatus.OK.value(), "Lấy đề thi thành công!", toExamResponse(exam)))
 				.orElseGet(() -> new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!"));
 	}
@@ -117,7 +117,7 @@ public class ExamServiceImpl implements ExamService {
 
 	@Override
 	public ApiResponse<ExamResponse> updateExam(Integer id, ExamRequest request) {
-		Exam exam = examRepository.findById(id).orElse(null);
+		Exam exam = examRepository.findByIdAndDeletedAtIsNull(id).orElse(null);
 		if (exam == null) {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!");
 		}
@@ -147,7 +147,7 @@ public class ExamServiceImpl implements ExamService {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!");
 		}
 
-		examQuestionRepository.deleteByExam_Id(id);
+		examQuestionRepository.softDeleteByExamId(id);
 		examRepository.delete(exam);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Xoá đề thi thành công!");
 	}
@@ -173,7 +173,7 @@ public class ExamServiceImpl implements ExamService {
 			if (!uniqueIds.add(questionId)) {
 				return "Danh sách câu hỏi bị trùng questionId!";
 			}
-			Question question = questionRepository.findById(questionId).orElse(null);
+			Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId).orElse(null);
 			if (question == null) {
 				return "Không tìm thấy question với id=" + questionId;
 			}
@@ -204,7 +204,7 @@ public class ExamServiceImpl implements ExamService {
 
 	private void syncExamQuestions(Exam exam, List<ExamQuestionItemRequest> items) {
 		Integer examId = exam.getId();
-		examQuestionRepository.deleteByExam_Id(examId);
+		examQuestionRepository.softDeleteByExamId(examId);
 		if (items == null || items.isEmpty()) {
 			return;
 		}
@@ -216,7 +216,7 @@ public class ExamServiceImpl implements ExamService {
 	}
 
 	private ExamQuestion buildExamQuestion(Exam exam, ExamQuestionItemRequest item) {
-		Question question = questionRepository.findById(item.getQuestionId()).orElseThrow();
+		Question question = questionRepository.findByIdAndDeletedAtIsNull(item.getQuestionId()).orElseThrow();
 
 		ExamQuestion examQuestion = new ExamQuestion();
 		examQuestion.setId(new ExamQuestionId(exam.getId(), question.getId()));
@@ -238,7 +238,7 @@ public class ExamServiceImpl implements ExamService {
 		String createdByUsername = creator != null ? creator.getUsername() : null;
 
 		List<ExamQuestionItemResponse> questionItems = examQuestionRepository
-				.findByExam_IdOrderByOrderIndexAscQuestion_IdAsc(exam.getId())
+				.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(exam.getId())
 				.stream()
 				.map(item -> {
 					Question question = item.getQuestion();
@@ -246,8 +246,8 @@ public class ExamServiceImpl implements ExamService {
 						return null;
 					}
 
-					List<QuestionOptionResponse> options = questionOptionRepository
-							.findByQuestion_IdOrderByIdAsc(question.getId())
+						List<QuestionOptionResponse> options = questionOptionRepository
+								.findByQuestion_IdAndDeletedAtIsNullOrderByIdAsc(question.getId())
 							.stream()
 							.map(option -> new QuestionOptionResponse(option.getId(), option.getContent()))
 							.collect(Collectors.toList());

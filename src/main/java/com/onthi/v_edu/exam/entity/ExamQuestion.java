@@ -4,9 +4,11 @@ import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.question.entity.Question;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
 
 @Entity
 @Table(name = "exam_questions")
+@SQLDelete(sql = "UPDATE exam_questions SET deleted_at = CURRENT_TIMESTAMP WHERE exam_id = ? AND question_id = ?")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,6 +39,9 @@ public class ExamQuestion {
     @Enumerated(EnumType.STRING)
     @Column(name = "content_format_snapshot")
     private ContentFormat contentFormatSnapshot;
+
+    @Column(name = "deleted_at")
+    private java.time.LocalDateTime deletedAt;
 
     public ExamQuestion(Exam exam, Question question) {
         this.exam = exam;

@@ -63,13 +63,13 @@ public class QuestionServiceImpl implements QuestionService {
 	public ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Integer subjectId, Integer topicId, Pageable pageable) {
 		Page<Question> questionPage;
 		if (subjectId != null && topicId != null) {
-			questionPage = questionRepository.findByTopic_IdAndTopic_Subject_Id(topicId, subjectId, pageable);
+			questionPage = questionRepository.findByTopic_IdAndTopic_Subject_IdAndDeletedAtIsNull(topicId, subjectId, pageable);
 		} else if (subjectId != null) {
-			questionPage = questionRepository.findByTopic_Subject_Id(subjectId, pageable);
+			questionPage = questionRepository.findByTopic_Subject_IdAndDeletedAtIsNull(subjectId, pageable);
 		} else if (topicId != null) {
-			questionPage = questionRepository.findByTopic_Id(topicId, pageable);
+			questionPage = questionRepository.findByTopic_IdAndDeletedAtIsNull(topicId, pageable);
 		} else {
-			questionPage = questionRepository.findAll(pageable);
+			questionPage = questionRepository.findByDeletedAtIsNull(pageable);
 		}
 
 		Page<QuestionResponse> data = questionPage
@@ -80,7 +80,7 @@ public class QuestionServiceImpl implements QuestionService {
 	@Override
 	@Transactional(readOnly = true)
 	public ApiResponse<QuestionResponse> getQuestionById(Integer id) {
-		return questionRepository.findById(id)
+		return questionRepository.findByIdAndDeletedAtIsNull(id)
 				.map(question -> new ApiResponse<>(HttpStatus.OK.value(), "Lấy câu hỏi thành công!", toQuestionResponse(question)))
 				.orElseGet(() -> new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy câu hỏi!"));
 	}
@@ -119,7 +119,7 @@ public class QuestionServiceImpl implements QuestionService {
 
 	@Override
 	public ApiResponse<QuestionResponse> updateQuestion(Integer id, QuestionRequest request) {
-		Question question = questionRepository.findById(id).orElse(null);
+		Question question = questionRepository.findByIdAndDeletedAtIsNull(id).orElse(null);
 		if (question == null) {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy câu hỏi!");
 		}
@@ -148,14 +148,14 @@ public class QuestionServiceImpl implements QuestionService {
 
 	@Override
 	public ApiResponse<Void> deleteQuestion(Integer id) {
-		Question question = questionRepository.findById(id).orElse(null);
+		Question question = questionRepository.findByIdAndDeletedAtIsNull(id).orElse(null);
 		if (question == null) {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy câu hỏi!");
 		}
 
-		explanationRepository.deleteByQuestionId(id);
-		essayAnswerRepository.deleteByQuestion_Id(id);
-		questionOptionRepository.deleteByQuestion_Id(id);
+		explanationRepository.softDeleteByQuestionId(id);
+		essayAnswerRepository.softDeleteByQuestionId(id);
+		questionOptionRepository.softDeleteByQuestionId(id);
 		questionRepository.delete(question);
 
 		return new ApiResponse<>(HttpStatus.OK.value(), "Xoá câu hỏi thành công!");
@@ -163,8 +163,8 @@ public class QuestionServiceImpl implements QuestionService {
 
 	private void syncQuestionDetails(Question question, QuestionRequest request) {
 		Integer questionId = question.getId();
-		questionOptionRepository.deleteByQuestion_Id(questionId);
-		essayAnswerRepository.deleteByQuestion_Id(questionId);
+		questionOptionRepository.softDeleteByQuestionId(questionId);
+		essayAnswerRepository.softDeleteByQuestionId(questionId);
 
 		if (request.getType() == QuestionType.MCQ) {
 			List<OptionRequest> optionRequests = request.getOptions() == null ? Collections.emptyList() : request.getOptions();
@@ -187,11 +187,11 @@ public class QuestionServiceImpl implements QuestionService {
 
 		String explanationContent = normalize(request.getExplanation());
 		if (isBlank(explanationContent)) {
-			explanationRepository.deleteByQuestionId(questionId);
+			explanationRepository.softDeleteByQuestionId(questionId);
 			return;
 		}
 
-		Explanation explanation = explanationRepository.findByQuestionId(questionId).orElse(null);
+		Explanation explanation = explanationRepository.findByQuestionIdAndDeletedAtIsNull(questionId).orElse(null);
 		if (explanation == null) {
 			explanation = new Explanation();
 			explanation.setQuestion(question);
@@ -225,12 +225,12 @@ public class QuestionServiceImpl implements QuestionService {
 
 	private QuestionResponse toQuestionResponse(Question question) {
 		Integer questionId = question.getId();
-		List<OptionResponse> options = questionOptionRepository.findByQuestion_IdOrderByIdAsc(questionId).stream()
+		List<OptionResponse> options = questionOptionRepository.findByQuestion_IdAndDeletedAtIsNullOrderByIdAsc(questionId).stream()
 				.map(option -> new OptionResponse(option.getId(), option.getContent(), option.getIsCorrect()))
 				.toList();
 
-		EssayAnswer essayAnswer = essayAnswerRepository.findByQuestion_Id(questionId).orElse(null);
-		Explanation explanation = explanationRepository.findByQuestionId(questionId).orElse(null);
+		EssayAnswer essayAnswer = essayAnswerRepository.findByQuestion_IdAndDeletedAtIsNull(questionId).orElse(null);
+		Explanation explanation = explanationRepository.findByQuestionIdAndDeletedAtIsNull(questionId).orElse(null);
 
 		Topic topic = question.getTopic();
 		User creator = question.getCreatedBy();

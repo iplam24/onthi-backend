@@ -94,7 +94,7 @@ public class AttemptServiceImpl implements AttemptService {
         }
         System.out.println("User: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
 
-        Exam exam = examRepository.findById(request.getExamId()).orElse(null);
+            Exam exam = examRepository.findByIdAndDeletedAtIsNull(request.getExamId()).orElse(null);
         if (exam == null) {
             System.out.println("[DEBUG] Lỗi: Không tìm thấy đề thi với ID: " + request.getExamId());
             return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!");
@@ -108,7 +108,7 @@ public class AttemptServiceImpl implements AttemptService {
         }
         System.out.println("ValidateStartConstraints: OK");
 
-        List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdOrderByOrderIndexAscQuestion_IdAsc(exam.getId());
+            List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(exam.getId());
         if (examQuestions.isEmpty()) {
             System.out.println("[DEBUG] Lỗi: Đề thi không có câu hỏi.");
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đề thi chưa có câu hỏi, không thể bắt đầu!");
@@ -174,7 +174,7 @@ public class AttemptServiceImpl implements AttemptService {
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đã hết thời gian làm bài, không thể nộp!");
         }
 
-        List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdOrderByOrderIndexAscQuestion_IdAsc(attempt.getExam().getId());
+            List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(attempt.getExam().getId());
         Map<Integer, ExamQuestion> examQuestionMap = new HashMap<>();
         for (ExamQuestion examQuestion : examQuestions) {
             Question question = examQuestion.getQuestion();
@@ -231,7 +231,7 @@ public class AttemptServiceImpl implements AttemptService {
                 System.out.println("  Người dùng chọn option ID: " + selectedOptionId);
 
                 QuestionOption selectedOption = resolveSelectedOption(question.getId(), selectedOptionId);
-                QuestionOption correctOption = questionOptionRepository.findFirstByQuestion_IdAndIsCorrectTrue(question.getId()).orElse(null);
+                        QuestionOption correctOption = questionOptionRepository.findFirstByQuestion_IdAndIsCorrectTrueAndDeletedAtIsNull(question.getId()).orElse(null);
                 
                 if (correctOption == null) {
                     System.out.println("  [DEBUG] -> Lỗi DB: Không tìm thấy đáp án đúng cho câu hỏi này trong database!");
@@ -257,7 +257,7 @@ public class AttemptServiceImpl implements AttemptService {
             } else {
                 System.out.println("  Loại câu hỏi: ESSAY (Tự luận)");
                 System.out.println("  => Kết quả: Cần chấm thủ công, điểm tạm tính là 0.");
-                EssayAnswer sample = essayAnswerRepository.findByQuestion_Id(question.getId()).orElse(null);
+                        EssayAnswer sample = essayAnswerRepository.findByQuestion_IdAndDeletedAtIsNull(question.getId()).orElse(null);
                 answer.setSelectedOption(null);
                 answer.setIsCorrect(null);
                 answer.setScore(0d);
@@ -442,7 +442,7 @@ public class AttemptServiceImpl implements AttemptService {
             if (question.getType() == QuestionType.MCQ) {
                 Integer selectedOptionId = answer.getSelectedOptionId();
                 if (selectedOptionId != null
-                        && questionOptionRepository.findByIdAndQuestion_Id(selectedOptionId, questionId).isEmpty()) {
+                                        && questionOptionRepository.findByIdAndQuestion_IdAndDeletedAtIsNull(selectedOptionId, questionId).isEmpty()) {
                     return "selectedOptionId không thuộc question id=" + questionId;
                 }
             } else if (answer.getSelectedOptionId() != null) {
@@ -456,7 +456,7 @@ public class AttemptServiceImpl implements AttemptService {
         if (selectedOptionId == null) {
             return null;
         }
-        return questionOptionRepository.findByIdAndQuestion_Id(selectedOptionId, questionId).orElse(null);
+            return questionOptionRepository.findByIdAndQuestion_IdAndDeletedAtIsNull(selectedOptionId, questionId).orElse(null);
     }
 
     private LocalDateTime calculateDeadline(Attempt attempt) {

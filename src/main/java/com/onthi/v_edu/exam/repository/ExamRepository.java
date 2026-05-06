@@ -6,8 +6,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface ExamRepository extends JpaRepository<Exam, Integer> {
-    long countBySubject_Id(Integer subjectId);
+    long countBySubject_IdAndDeletedAtIsNull(Integer subjectId);
 
-    Page<Exam> findBySubject_Id(Integer subjectId, Pageable pageable);
+    Page<Exam> findBySubject_IdAndDeletedAtIsNull(Integer subjectId, Pageable pageable);
+
+    Page<Exam> findByDeletedAtIsNull(Pageable pageable);
+
+    java.util.Optional<Exam> findByIdAndDeletedAtIsNull(Integer id);
 }
 

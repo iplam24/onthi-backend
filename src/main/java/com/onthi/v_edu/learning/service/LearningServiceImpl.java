@@ -190,7 +190,7 @@ public class LearningServiceImpl implements LearningService {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy subject!");
 		}
 
-		long inUseByExams = examRepository.countBySubject_Id(id);
+		long inUseByExams = examRepository.countBySubject_IdAndDeletedAtIsNull(id);
 		long inUseByTopics = topicRepository.countBySubject_Id(id);
 		if (inUseByExams > 0 || inUseByTopics > 0) {
 			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không thể xoá subject vì đang được sử dụng!");
@@ -272,7 +272,7 @@ public class LearningServiceImpl implements LearningService {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy topic!");
 		}
 
-		long inUseByQuestions = questionRepository.countByTopic_Id(id);
+		long inUseByQuestions = questionRepository.countByTopic_IdAndDeletedAtIsNull(id);
 		long inUseByProgress = progressRepository.countByTopic_Id(id);
 		long inUseByUserQuestions = userQuestionRepository.countByTopic_Id(id);
 		if (inUseByQuestions > 0 || inUseByProgress > 0 || inUseByUserQuestions > 0) {

@@ -656,7 +656,7 @@ This document provides a comprehensive overview of all the APIs available in the
             "createdByUsername": "admin",
             "createdAt": "2026-04-22T10:15:00",
             "options": [],
-            "sampleAnswer": "Đáp án mẫu",
+            "sampleAnswer": "\\int_0^1 x^2 \\, dx = \\frac{1}{3}",
             "explanation": null,
             "explanationCreatedAt": null
           }
