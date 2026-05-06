@@ -12,7 +12,9 @@ import java.util.List;
 public interface AnswerRepository extends JpaRepository<Answer, Integer> {
 
     @Query("SELECT a FROM Answer a " +
-           "LEFT JOIN FETCH a.question " +
+           "LEFT JOIN FETCH a.question q " +
+           "LEFT JOIN FETCH q.topic t " +
+           "LEFT JOIN FETCH t.subject s " +
            "LEFT JOIN FETCH a.selectedOption " +
            "WHERE a.attempt.id = :attemptId " +
            "ORDER BY a.id ASC")

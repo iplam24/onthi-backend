@@ -1,4 +1,5 @@
 package com.onthi.v_edu.question.entity;
+import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.common.constant.DifficultyLevel;
 import com.onthi.v_edu.common.constant.QuestionType;
 import com.onthi.v_edu.learning.entity.Topic;
@@ -32,6 +33,11 @@ public class Question {
     private Integer id;
     @Lob
     private String content;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "content_format")
+    private ContentFormat contentFormat;
+
     @Column(length = 500)
     private String url;
     @Enumerated(EnumType.STRING)

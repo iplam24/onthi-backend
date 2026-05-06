@@ -1,5 +1,6 @@
 package com.onthi.v_edu.exam.entity;
 
+import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.question.entity.Question;
 import jakarta.persistence.*;
 import lombok.*;
@@ -32,6 +33,10 @@ public class ExamQuestion {
 
     @Column(columnDefinition = "TEXT")
     private String contentSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "content_format_snapshot")
+    private ContentFormat contentFormatSnapshot;
 
     public ExamQuestion(Exam exam, Question question) {
         this.exam = exam;

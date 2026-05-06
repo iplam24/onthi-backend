@@ -1,5 +1,6 @@
 package com.onthi.v_edu.question.dto;
 
+import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.common.constant.DifficultyLevel;
 import com.onthi.v_edu.common.constant.QuestionType;
 import lombok.AllArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.List;
 public class QuestionResponse {
 	private Integer id;
 	private String content;
+	private ContentFormat contentFormat;
 	private String url;
 	private QuestionType type;
 	private DifficultyLevel difficulty;

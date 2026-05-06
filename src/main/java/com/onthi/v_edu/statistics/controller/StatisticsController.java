@@ -1,7 +1,9 @@
 package com.onthi.v_edu.statistics.controller;
 
+import com.onthi.v_edu.attempt.dto.AttemptFilterRequest;
 import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.statistics.service.StatisticsService;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +23,13 @@ public class StatisticsController {
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<?>> getDashboardStats() {
         ApiResponse<?> response = statisticsService.getDashboardStats();
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+
+    @GetMapping("/me/evaluation")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<?>> getMyEvaluation(@ParameterObject AttemptFilterRequest filter) {
+        ApiResponse<?> response = statisticsService.getMyStudentEvaluation(filter);
         return ResponseEntity.status(response.getStatus()).body(response);
     }
 }

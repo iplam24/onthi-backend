@@ -1,5 +1,6 @@
 package com.onthi.v_edu.attempt.dto;
 
+import com.onthi.v_edu.common.constant.ContentFormat;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,6 +15,8 @@ public class AttemptAnswerResponse {
     private Integer questionId;
 
     private String questionContent;
+
+    private ContentFormat questionFormatSnapshot;
 
     private Integer selectedOptionId;
 

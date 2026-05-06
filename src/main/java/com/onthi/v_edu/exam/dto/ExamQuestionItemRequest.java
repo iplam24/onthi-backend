@@ -1,5 +1,6 @@
 package com.onthi.v_edu.exam.dto;
 
+import com.onthi.v_edu.common.constant.ContentFormat;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,5 +17,7 @@ public class ExamQuestionItemRequest {
     private Double score;
 
     private String contentSnapshot;
+
+    private ContentFormat contentFormatSnapshot;
 }
 

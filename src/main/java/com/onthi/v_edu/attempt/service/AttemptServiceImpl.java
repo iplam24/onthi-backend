@@ -2,6 +2,7 @@ package com.onthi.v_edu.attempt.service;
 
 import com.onthi.v_edu.attempt.dto.AttemptAnswerResponse;
 import com.onthi.v_edu.attempt.dto.AttemptDetailResponse;
+import com.onthi.v_edu.attempt.dto.AttemptFilterRequest;
 import com.onthi.v_edu.attempt.dto.AttemptStartRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitAnswerRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitRequest;
@@ -220,6 +221,7 @@ public class AttemptServiceImpl implements AttemptService {
             answer.setQuestion(question);
             answer.setEssayAnswer(normalize(submitted.getEssayAnswer()));
             answer.setQuestionSnapshot(question.getContent());
+            answer.setQuestionFormatSnapshot(question.getContentFormat());
             answer.setCreatedAt(now);
             answer.setUpdatedAt(now);
 
@@ -342,13 +344,29 @@ public class AttemptServiceImpl implements AttemptService {
 
     @Override
     @Transactional(readOnly = true)
-    public ApiResponse<PageResponse<AttemptSummaryResponse>> getMyAttempts(Pageable pageable) {
+    public ApiResponse<PageResponse<AttemptSummaryResponse>> getMyAttempts(AttemptFilterRequest filter, Pageable pageable) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để xem lịch sử làm bài!");
         }
 
-        Page<AttemptSummaryResponse> data = attemptRepository.findByUser_Id(currentUser.getId(), pageable)
+        AttemptFilterRequest effectiveFilter = filter == null ? new AttemptFilterRequest() : filter;
+        String keyword = normalize(effectiveFilter.getKeyword());
+        if (keyword != null && keyword.isEmpty()) {
+            keyword = null;
+        }
+
+        Page<AttemptSummaryResponse> data = attemptRepository.searchMyAttempts(
+                        currentUser.getId(),
+                        effectiveFilter.getSubjectId(),
+                        effectiveFilter.getLevelId(),
+                        effectiveFilter.getExamId(),
+                        effectiveFilter.getStatus(),
+                        effectiveFilter.getFlagged(),
+                        effectiveFilter.getFrom(),
+                        effectiveFilter.getTo(),
+                        keyword,
+                        pageable)
                 .map(this::toAttemptSummaryResponse);
 
         return new ApiResponse<>(HttpStatus.OK.value(), "Lấy lịch sử làm bài thành công!", PageResponse.from(data));
@@ -474,11 +492,19 @@ public class AttemptServiceImpl implements AttemptService {
         Exam exam = attempt.getExam();
         Integer examId = exam != null ? exam.getId() : null;
         String examTitle = exam != null ? exam.getTitle() : null;
+        Integer subjectId = getSubjectId(exam);
+        String subjectName = getSubjectName(exam);
+        Integer subjectLevelId = getSubjectLevelId(exam);
+        String subjectLevelName = getSubjectLevelName(exam);
 
         return new AttemptSummaryResponse(
                 attempt.getId(),
                 examId,
                 examTitle,
+                subjectId,
+                subjectName,
+                subjectLevelId,
+                subjectLevelName,
                 attempt.getStatus(),
                 attempt.getScore(),
                 attempt.getCorrectCount(),
@@ -501,6 +527,7 @@ public class AttemptServiceImpl implements AttemptService {
                 .map(answer -> new AttemptAnswerResponse(
                         answer.getQuestion() != null ? answer.getQuestion().getId() : null,
                         answer.getQuestion() != null ? answer.getQuestion().getContent() : null,
+                        answer.getQuestionFormatSnapshot(),
                         answer.getSelectedOption() != null ? answer.getSelectedOption().getId() : null,
                         answer.getEssayAnswer(),
                         answer.getIsCorrect(),
@@ -512,6 +539,10 @@ public class AttemptServiceImpl implements AttemptService {
                 summary.getId(),
                 summary.getExamId(),
                 summary.getExamTitle(),
+                summary.getSubjectId(),
+                summary.getSubjectName(),
+                summary.getSubjectLevelId(),
+                summary.getSubjectLevelName(),
                 summary.getStatus(),
                 summary.getScore(),
                 summary.getCorrectCount(),
@@ -526,6 +557,26 @@ public class AttemptServiceImpl implements AttemptService {
                 summary.getFlagged(),
                 answers
         );
+    }
+
+    private Integer getSubjectId(Exam exam) {
+        return exam != null && exam.getSubject() != null ? exam.getSubject().getId() : null;
+    }
+
+    private String getSubjectName(Exam exam) {
+        return exam != null && exam.getSubject() != null ? exam.getSubject().getName() : null;
+    }
+
+    private Integer getSubjectLevelId(Exam exam) {
+        return exam != null && exam.getSubject() != null && exam.getSubject().getLevel() != null
+                ? exam.getSubject().getLevel().getId()
+                : null;
+    }
+
+    private String getSubjectLevelName(Exam exam) {
+        return exam != null && exam.getSubject() != null && exam.getSubject().getLevel() != null
+                ? exam.getSubject().getLevel().getName()
+                : null;
     }
 
     private User getCurrentUser() {

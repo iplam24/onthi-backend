@@ -20,6 +20,14 @@ public class AttemptSummaryResponse {
 
     private String examTitle;
 
+    private Integer subjectId;
+
+    private String subjectName;
+
+    private Integer subjectLevelId;
+
+    private String subjectLevelName;
+
     private AttemptStatus status;
 
     private Double score;

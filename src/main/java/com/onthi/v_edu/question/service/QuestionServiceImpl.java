@@ -1,5 +1,6 @@
 package com.onthi.v_edu.question.service;
 
+import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.common.constant.QuestionType;
 import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.common.dto.PageResponse;
@@ -103,6 +104,7 @@ public class QuestionServiceImpl implements QuestionService {
 
 		Question question = new Question();
 		question.setContent(normalize(request.getContent()));
+		question.setContentFormat(resolveContentFormat(request.getContentFormat()));
 		question.setUrl(normalize(request.getUrl()));
 		question.setType(request.getType());
 		question.setDifficulty(request.getDifficulty());
@@ -133,6 +135,7 @@ public class QuestionServiceImpl implements QuestionService {
 		}
 
 		question.setContent(normalize(request.getContent()));
+		question.setContentFormat(resolveContentFormat(request.getContentFormat()));
 		question.setUrl(normalize(request.getUrl()));
 		question.setType(request.getType());
 		question.setDifficulty(request.getDifficulty());
@@ -239,6 +242,7 @@ public class QuestionServiceImpl implements QuestionService {
 		return new QuestionResponse(
 				questionId,
 				question.getContent(),
+				question.getContentFormat(),
 				question.getUrl(),
 				question.getType(),
 				question.getDifficulty(),
@@ -278,5 +282,9 @@ public class QuestionServiceImpl implements QuestionService {
 
 	private boolean isBlank(String value) {
 		return value == null || value.trim().isEmpty();
+	}
+
+	private ContentFormat resolveContentFormat(ContentFormat contentFormat) {
+		return contentFormat == null ? ContentFormat.PLAIN_TEXT : contentFormat;
 	}
 }

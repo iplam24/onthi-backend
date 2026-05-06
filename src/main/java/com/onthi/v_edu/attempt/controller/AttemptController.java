@@ -2,6 +2,7 @@ package com.onthi.v_edu.attempt.controller;
 
 import com.onthi.v_edu.attempt.dto.AttemptStartRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitRequest;
+import com.onthi.v_edu.attempt.dto.AttemptFilterRequest;
 import com.onthi.v_edu.attempt.dto.ViolationRecordRequest;
 import com.onthi.v_edu.attempt.service.AttemptService;
 import com.onthi.v_edu.common.dto.ApiResponse;
@@ -58,9 +59,10 @@ public class AttemptController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<?>> getMyAttempts(
+            @ParameterObject AttemptFilterRequest filter,
             @ParameterObject
             @PageableDefault(size = 10, sort = "startedAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        ApiResponse<?> response = attemptService.getMyAttempts(pageable);
+        ApiResponse<?> response = attemptService.getMyAttempts(filter, pageable);
         return ResponseEntity.status(response.getStatus()).body(response);
     }
 }

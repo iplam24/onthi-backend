@@ -225,6 +225,7 @@ public class ExamServiceImpl implements ExamService {
 		examQuestion.setOrderIndex(item.getOrderIndex());
 		examQuestion.setScore(item.getScore());
 		examQuestion.setContentSnapshot(normalize(item.getContentSnapshot()));
+		examQuestion.setContentFormatSnapshot(item.getContentFormatSnapshot() != null ? item.getContentFormatSnapshot() : question.getContentFormat());
 		return examQuestion;
 	}
 
@@ -254,10 +255,12 @@ public class ExamServiceImpl implements ExamService {
 					return new ExamQuestionItemResponse(
 							question.getId(),
 							question.getContent(),
+							question.getContentFormat(),
 							question.getUrl(), // Added
 							item.getOrderIndex(),
 							item.getScore(),
 							item.getContentSnapshot(),
+							item.getContentFormatSnapshot() != null ? item.getContentFormatSnapshot() : question.getContentFormat(),
 							options
 					);
 				})

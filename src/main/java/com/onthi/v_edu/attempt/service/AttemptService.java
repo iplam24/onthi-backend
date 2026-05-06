@@ -1,6 +1,7 @@
 package com.onthi.v_edu.attempt.service;
 
 import com.onthi.v_edu.attempt.dto.AttemptDetailResponse;
+import com.onthi.v_edu.attempt.dto.AttemptFilterRequest;
 import com.onthi.v_edu.attempt.dto.AttemptStartRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSubmitRequest;
 import com.onthi.v_edu.attempt.dto.AttemptSummaryResponse;
@@ -19,5 +20,5 @@ public interface AttemptService {
 
 	ApiResponse<AttemptDetailResponse> getMyAttemptById(Integer attemptId);
 
-	ApiResponse<PageResponse<AttemptSummaryResponse>> getMyAttempts(Pageable pageable);
+	ApiResponse<PageResponse<AttemptSummaryResponse>> getMyAttempts(AttemptFilterRequest filter, Pageable pageable);
 }

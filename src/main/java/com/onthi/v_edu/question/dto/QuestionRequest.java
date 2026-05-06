@@ -1,5 +1,6 @@
 package com.onthi.v_edu.question.dto;
 
+import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.common.constant.DifficultyLevel;
 import com.onthi.v_edu.common.constant.QuestionType;
 import jakarta.validation.Valid;
@@ -15,6 +16,8 @@ import java.util.List;
 public class QuestionRequest {
 	@NotBlank
 	private String content;
+
+	private ContentFormat contentFormat;
 
 	private String url;
 
