@@ -29,10 +29,12 @@ public class SecurityConfig {
     private final RestAccessDeniedHandler restAccessDeniedHandler;
     private final CorsConfigurationSource corsConfigurationSource;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          RestAuthenticationEntryPoint restAuthenticationEntryPoint,
-                          RestAccessDeniedHandler restAccessDeniedHandler,
-                          CorsConfigurationSource corsConfigurationSource) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            RestAuthenticationEntryPoint restAuthenticationEntryPoint,
+            RestAccessDeniedHandler restAccessDeniedHandler,
+            CorsConfigurationSource corsConfigurationSource
+    ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.restAuthenticationEntryPoint = restAuthenticationEntryPoint;
         this.restAccessDeniedHandler = restAccessDeniedHandler;
@@ -51,24 +53,54 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.cors(cors -> cors.configurationSource(corsConfigurationSource))
+
+        http
+                // 💗 CORS FIX QUAN TRỌNG
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+
+                // 💗 CSRF disable cho REST API
                 .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // 💗 Stateless JWT
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+
+                // 💗 Handle lỗi auth
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(restAuthenticationEntryPoint)
                         .accessDeniedHandler(restAccessDeniedHandler)
                 )
-                .authorizeHttpRequests(authorize ->
-                        authorize.requestMatchers("/api/auth/**").permitAll()
-                                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                                .requestMatchers("/api/questions/**").authenticated()
-                                .requestMatchers("/api/exams/**").authenticated()
-                                .requestMatchers("/api/attempts/**").authenticated()
-                                .requestMatchers(HttpMethod.GET, "/**").permitAll()
-                                .anyRequest().authenticated()
+
+                // 💗 RULE API
+                .authorizeHttpRequests(auth -> auth
+
+                        // 🔓 Auth public
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // 🔓 Swagger
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                        // 🔓 File upload nếu cần public (rất quan trọng cho frontend admin)
+                        .requestMatchers("/api/files/**").permitAll()
+
+                        // 🔐 API nghiệp vụ
+                        .requestMatchers("/api/questions/**").authenticated()
+                        .requestMatchers("/api/exams/**").authenticated()
+                        .requestMatchers("/api/attempts/**").authenticated()
+
+                        // 🔓 GET public (cẩn thận nhưng ok cho hệ thống ôn thi)
+                        .requestMatchers(HttpMethod.GET, "/**").permitAll()
+
+                        // 🔐 còn lại
+                        .anyRequest().authenticated()
                 );
 
-        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // 💗 JWT filter
+        http.addFilterBefore(
+                jwtAuthenticationFilter,
+                UsernamePasswordAuthenticationFilter.class
+        );
 
         return http.build();
     }
