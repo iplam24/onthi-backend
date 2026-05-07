@@ -15,6 +15,13 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/files")
 @PreAuthorize("isAuthenticated()")
+// Allow CORS from admin/frontend domains specifically for upload endpoint as a fallback
+@org.springframework.web.bind.annotation.CrossOrigin(
+		origins = {"https://admin.vuxuanlam.me", "https://onthi.vuxuanlam.me", "https://api.vuxuanlam.me"},
+		allowCredentials = "true",
+		allowedHeaders = "*",
+		methods = {org.springframework.web.bind.annotation.RequestMethod.POST, org.springframework.web.bind.annotation.RequestMethod.OPTIONS}
+)
 public class FileUpLoadController {
 
 	private final FileUpLoadService fileUpLoadService;
