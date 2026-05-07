@@ -165,12 +165,9 @@ public class AttemptServiceImpl implements AttemptService {
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime deadline = calculateDeadline(attempt);
-        if (deadline != null && now.isAfter(deadline)) {
+        if (deadline != null && !now.isBefore(deadline)) {
             System.out.println("[DEBUG] Lỗi: Đã hết thời gian làm bài.");
-            attempt.setStatus(AttemptStatus.EXPIRED);
-            attempt.setExpiredAt(now);
-            attempt.setDurationTaken(calculateDurationSeconds(attempt.getStartedAt(), now));
-            attemptRepository.save(attempt);
+            expireAttempt(attempt, now);
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đã hết thời gian làm bài, không thể nộp!");
         }
 
@@ -296,6 +293,19 @@ public class AttemptServiceImpl implements AttemptService {
         System.out.println("--- [DEBUG] Kết thúc submitAttempt ---\n");
 
         return new ApiResponse<>(HttpStatus.OK.value(), "Nộp bài thành công!", toAttemptDetailResponse(attempt));
+    }
+
+    @Override
+    public void expireOverdueAttempts() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Attempt> doingAttempts = attemptRepository.findByStatus(AttemptStatus.DOING);
+
+        for (Attempt attempt : doingAttempts) {
+            if (isDeadlineReached(attempt, now)) {
+                System.out.println("[DEBUG] Auto-expiring attempt ID: " + attempt.getId());
+                expireAttempt(attempt, now);
+            }
+        }
     }
 
     @Override
@@ -479,6 +489,22 @@ public class AttemptServiceImpl implements AttemptService {
             return examEndTime;
         }
         return deadline;
+    }
+
+    private boolean isDeadlineReached(Attempt attempt, LocalDateTime now) {
+        LocalDateTime deadline = calculateDeadline(attempt);
+        return deadline != null && !now.isBefore(deadline);
+    }
+
+    private void expireAttempt(Attempt attempt, LocalDateTime now) {
+        if (attempt == null || attempt.getStatus() != AttemptStatus.DOING) {
+            return;
+        }
+
+        attempt.setStatus(AttemptStatus.EXPIRED);
+        attempt.setExpiredAt(now);
+        attempt.setDurationTaken(calculateDurationSeconds(attempt.getStartedAt(), now));
+        attemptRepository.save(attempt);
     }
 
     private int calculateDurationSeconds(LocalDateTime startedAt, LocalDateTime endTime) {

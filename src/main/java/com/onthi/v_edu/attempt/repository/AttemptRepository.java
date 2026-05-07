@@ -19,6 +19,9 @@ public interface AttemptRepository extends JpaRepository<Attempt, Integer> {
 
     boolean existsByUser_IdAndExam_IdAndStatus(Integer userId, Integer examId, AttemptStatus status);
 
+    @EntityGraph(attributePaths = {"exam", "exam.subject", "exam.subject.level"})
+    List<Attempt> findByStatus(AttemptStatus status);
+
     long countByUser_IdAndExam_Id(Integer userId, Integer examId);
 
     List<Attempt> findByUser_IdOrderByStartedAtDesc(Integer userId);

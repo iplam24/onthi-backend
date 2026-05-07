@@ -53,6 +53,7 @@ All endpoints require JWT login.
 - Enforce max attempts from exam settings.
 - Reject submit if attempt already submitted/expired.
 - Enforce server-side deadline using attempt start time + exam duration (and exam end time if earlier).
+- Attempts that reach the deadline are automatically marked `EXPIRED` by the backend scheduler.
 - Reject answers that contain question IDs outside the exam.
 - Reject duplicate `questionId` in submit payload.
 - Reject MCQ answer when `selectedOptionId` does not belong to that question.

@@ -16,6 +16,8 @@ public interface AttemptService {
 
 	ApiResponse<AttemptDetailResponse> submitAttempt(Integer attemptId, AttemptSubmitRequest request);
 
+	void expireOverdueAttempts();
+
 	ApiResponse<AttemptDetailResponse> recordViolation(Integer attemptId, ViolationRecordRequest request);
 
 	ApiResponse<AttemptDetailResponse> getMyAttemptById(Integer attemptId);
