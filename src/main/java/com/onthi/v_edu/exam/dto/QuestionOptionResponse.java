@@ -10,4 +10,5 @@ import lombok.NoArgsConstructor;
 public class QuestionOptionResponse {
     private Integer id;
     private String content;
+    private Boolean isCorrect;
 }

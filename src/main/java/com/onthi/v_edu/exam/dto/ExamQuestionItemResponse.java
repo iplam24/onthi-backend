@@ -1,6 +1,7 @@
 package com.onthi.v_edu.exam.dto;
 
 import com.onthi.v_edu.common.constant.ContentFormat;
+import com.onthi.v_edu.common.constant.QuestionType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,6 +20,8 @@ public class ExamQuestionItemResponse {
     private String questionContent;
 
     private ContentFormat questionContentFormat;
+
+    private QuestionType questionType;
 
     private String url; // Added field for image URL
 

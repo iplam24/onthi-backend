@@ -88,6 +88,7 @@ CREATE TABLE user_plans (
 CREATE TABLE subjects (
                           id INT AUTO_INCREMENT PRIMARY KEY,
                           name VARCHAR(100),
+                          ui_layout_hint VARCHAR(50),
                           level_id INT,
                           FOREIGN KEY (level_id) REFERENCES levels(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -229,6 +230,8 @@ CREATE TABLE answers (
     -- 🔥 SNAPSHOT
                          question_snapshot TEXT,
                          correct_answer_snapshot TEXT,
+                         ai_feedback TEXT,
+                         ai_grading_method VARCHAR(100),
 
                          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                          UNIQUE (attempt_id, question_id),

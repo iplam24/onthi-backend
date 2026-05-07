@@ -4,7 +4,6 @@ import com.onthi.v_edu.question.entity.Question;
 import com.onthi.v_edu.question.entity.QuestionOption;
 import jakarta.persistence.*;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -51,6 +50,12 @@ public class Answer {
 
     @Column(columnDefinition = "TEXT")
     private String correctAnswerSnapshot;
+
+    @Column(name = "ai_feedback", columnDefinition = "TEXT")
+    private String aiFeedback;
+
+    @Column(name = "ai_grading_method", length = 100)
+    private String aiGradingMethod;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

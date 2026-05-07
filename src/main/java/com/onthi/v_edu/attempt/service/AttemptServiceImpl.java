@@ -93,36 +93,41 @@ public class AttemptServiceImpl implements AttemptService {
 
     @Override
     public ApiResponse<AttemptDetailResponse> startAttempt(AttemptStartRequest request) {
-        System.out.println("\n--- [DEBUG] AttemptService.startAttempt ---");
-        System.out.println("Request Body: { examId: " + request.getExamId() + " }");
-
         User currentUser = getCurrentUser();
         if (currentUser == null) {
-            System.out.println("[DEBUG] Lỗi: Người dùng chưa đăng nhập.");
             return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để bắt đầu làm bài!");
         }
-        System.out.println("User: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
 
-            Exam exam = examRepository.findByIdAndDeletedAtIsNull(request.getExamId()).orElse(null);
+        Exam exam = examRepository.findByIdAndDeletedAtIsNull(request.getExamId()).orElse(null);
         if (exam == null) {
-            System.out.println("[DEBUG] Lỗi: Không tìm thấy đề thi với ID: " + request.getExamId());
             return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!");
         }
-        System.out.println("Exam: '" + exam.getTitle() + "' (ID: " + exam.getId() + ")");
 
+        // 1. Kiểm tra nếu đang có bài làm dở (DOING) - Ưu tiên trả về để resume
+        Attempt activeAttempt = attemptRepository
+                .findFirstByUser_IdAndExam_IdAndStatusOrderByStartedAtDesc(currentUser.getId(), exam.getId(), AttemptStatus.DOING)
+                .orElse(null);
+
+        if (activeAttempt != null) {
+            LocalDateTime now = LocalDateTime.now();
+            if (isDeadlineReached(activeAttempt, now)) {
+                expireAttempt(activeAttempt, now);
+                // Sau khi expire, ta tiếp tục để kiểm tra maxAttempts và tạo bài mới nếu cần
+            } else {
+                return new ApiResponse<>(HttpStatus.OK.value(), "Bạn đang có bài làm dở, hãy tiếp tục!", toAttemptDetailResponse(activeAttempt));
+            }
+        }
+
+        // 2. Nếu không có bài làm dở hoặc bài cũ đã expire, kiểm tra các điều kiện để bắt đầu bài mới
         String antiCheatError = validateStartConstraints(currentUser, exam);
         if (antiCheatError != null) {
-            System.out.println("[DEBUG] Lỗi validateStartConstraints: " + antiCheatError);
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), antiCheatError);
         }
-        System.out.println("ValidateStartConstraints: OK");
 
-            List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(exam.getId());
+        List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(exam.getId());
         if (examQuestions.isEmpty()) {
-            System.out.println("[DEBUG] Lỗi: Đề thi không có câu hỏi.");
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đề thi chưa có câu hỏi, không thể bắt đầu!");
         }
-        System.out.println("Số lượng câu hỏi: " + examQuestions.size());
 
         Attempt attempt = new Attempt();
         attempt.setUser(currentUser);
@@ -138,8 +143,6 @@ public class AttemptServiceImpl implements AttemptService {
         attempt.setViolationScore(0);
         attempt.setFlagged(Boolean.FALSE);
         attempt = attemptRepository.save(attempt);
-        System.out.println("Tạo thành công lượt làm bài (Attempt) với ID: " + attempt.getId());
-        System.out.println("--- [DEBUG] Kết thúc startAttempt ---\n");
 
         return new ApiResponse<>(HttpStatus.CREATED.value(), "Bắt đầu làm bài thành công!", toAttemptDetailResponse(attempt));
     }
@@ -277,6 +280,8 @@ public class AttemptServiceImpl implements AttemptService {
                 if (!gradingResult.isPending()) {
                     answer.setScore(gradingResult.getScore() != null ? gradingResult.getScore() : 0d);
                     answer.setIsCorrect(gradingResult.getIsCorrect());
+                    answer.setAiFeedback(gradingResult.getReason());
+                    answer.setAiGradingMethod("LOCAL");
                     System.out.println("  => Tự động chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect());
                     
                     double awardedScore = gradingResult.getScore() != null ? gradingResult.getScore() : 0d;
@@ -305,6 +310,8 @@ public class AttemptServiceImpl implements AttemptService {
                         // Chấm thành công từ Gemini
                         answer.setScore(aiResult.getScore());
                         answer.setIsCorrect(aiResult.getIsCorrect());
+                        answer.setAiFeedback(aiResult.getFeedback());
+                        answer.setAiGradingMethod(aiResult.getGradingMethod());
                         System.out.println("  => Gemini chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect() + ", Feedback = " + aiResult.getFeedback());
 
                         totalScore += aiResult.getScore();
@@ -329,6 +336,8 @@ public class AttemptServiceImpl implements AttemptService {
                         if (fallbackResult.getScore() != null) {
                             answer.setScore(fallbackResult.getScore());
                             answer.setIsCorrect(fallbackResult.getIsCorrect());
+                            answer.setAiFeedback(fallbackResult.getFeedback());
+                            answer.setAiGradingMethod(fallbackResult.getGradingMethod());
                             System.out.println("  => GitHub Models chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect() + ", Feedback = " + fallbackResult.getFeedback());
 
                             totalScore += fallbackResult.getScore();
@@ -342,6 +351,8 @@ public class AttemptServiceImpl implements AttemptService {
                             // Cả Gemini và GitHub Models đều lỗi, giữ nguyên trạng thái tạm
                             answer.setScore(0d);
                             answer.setIsCorrect(null);
+                            answer.setAiFeedback("Không thể chấm tự động do Gemini/GitHub Models đều lỗi");
+                            answer.setAiGradingMethod("FALLBACK_FAILED");
                             System.out.println("  => Cả Gemini và GitHub Models đều lỗi, điểm tạm tính là 0.");
                         }
                     }
@@ -492,12 +503,7 @@ public class AttemptServiceImpl implements AttemptService {
         }
         System.out.println("  [DEBUG] -> Check EndTime: OK");
 
-        boolean hasDoingAttempt = attemptRepository.existsByUser_IdAndExam_IdAndStatus(user.getId(), exam.getId(), AttemptStatus.DOING);
-        if (hasDoingAttempt) {
-            System.out.println("  [DEBUG] -> Lỗi: Tìm thấy một lượt làm bài đang 'DOING'.");
-            return "Bạn đang có một lượt làm bài chưa nộp cho đề thi này!";
-        }
-        System.out.println("  [DEBUG] -> Check Doing Attempt: OK");
+        System.out.println("  [DEBUG] -> Check EndTime: OK");
 
         Integer maxAttempts = exam.getMaxAttempts();
         if (maxAttempts != null && maxAttempts > 0) {
@@ -644,7 +650,9 @@ public class AttemptServiceImpl implements AttemptService {
                         answer.getSelectedOption() != null ? answer.getSelectedOption().getId() : null,
                         answer.getEssayAnswer(),
                         answer.getIsCorrect(),
-                        answer.getScore()
+                        answer.getScore(),
+                        answer.getAiFeedback(),
+                        answer.getAiGradingMethod()
                 ))
                 .toList();
 

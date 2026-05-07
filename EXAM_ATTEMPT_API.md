@@ -44,15 +44,29 @@ Tài liệu riêng cho luồng **ôn thi / làm đề**.
         "endTime": null,
         "totalScore": 10.0,
         "type": "MULTIPLE_CHOICE",
+        "uiLayoutHint": "STANDARD",
         "shuffleQuestions": true,
         "shuffleAnswers": true,
         "maxAttempts": 1,
         "createdAt": "2026-04-22T10:00:00",
         "updatedAt": null,
+        "sections": [
+          {
+            "sectionIndex": 1,
+            "title": "Phần I - Trắc nghiệm",
+            "sectionType": "MCQ",
+            "questionCount": 10,
+            "totalScore": 10.0,
+            "startOrderIndex": 1,
+            "endOrderIndex": 10,
+            "questions": []
+          }
+        ],
         "questions": [
           {
             "questionId": 101,
             "questionContent": "Câu 1?",
+            "questionType": "MCQ",
             "orderIndex": 1,
             "score": 1.0,
             "contentSnapshot": "Câu 1?"
@@ -87,9 +101,20 @@ Tài liệu riêng cho luồng **ôn thi / làm đề**.
 **Response `questions[]` fields**
 - `questionId`
 - `questionContent`
+- `questionType`
 - `orderIndex`
 - `score`
 - `contentSnapshot`
+
+**Response `sections[]` fields**
+- `sectionIndex`
+- `title` (ví dụ: `Phần I - Trắc nghiệm`, `Phần II - Tự luận`)
+- `sectionType` (`MCQ`, `ESSAY`, `MIXED`)
+- `questionCount`
+- `totalScore`
+- `startOrderIndex`
+- `endOrderIndex`
+- `questions[]`
 
 ### 1.4 Create exam
 
@@ -229,12 +254,31 @@ Tài liệu riêng cho luồng **ôn thi / làm đề**.
         "selectedOptionId": 101,
         "essayAnswer": null,
         "isCorrect": true,
-        "score": 1.0
+        "score": 1.0,
+        "feedback": null,
+        "gradingMethod": "MCQ"
       }
     ]
   }
 }
 ```
+
+### 2.4 Feedback cho câu tự luận
+
+Khi câu hỏi là tự luận, response `answers[]` có thể trả thêm:
+- `feedback`: nhận xét đầy đủ từ AI hoặc chấm local
+- `gradingMethod`: ví dụ `LOCAL`, `Chấm bằng Gemini AI`, `Chấm bằng GitHub Models`, `FALLBACK_FAILED`
+
+Frontend có thể dùng `feedback` để hiển thị phần “Giải thích / nhận xét / góp ý”.
+
+### 2.5 AI feedback lưu trong lịch sử
+
+Feedback tự luận hiện được lưu trên từng `Answer`, nên khi gọi:
+- `POST /api/attempts/{attemptId}/submit`
+- `GET /api/attempts/{attemptId}`
+- `GET /api/attempts/me`
+
+frontend vẫn có thể lấy lại `feedback` và `gradingMethod` sau khi reload trang.
 
 ### 2.3 Get attempt by id
 
@@ -278,8 +322,22 @@ Tài liệu riêng cho luồng **ôn thi / làm đề**.
 - `startTime`: thời gian bắt đầu
 - `endTime`: thời gian kết thúc
 - `status`: `DRAFT` / `SCHEDULED` / `ACTIVE` / `EXPIRED` / `ARCHIVED`
+- `uiLayoutHint`: gợi ý UI như `STANDARD`, `LITERATURE`, `ESSAY`, `MIXED`
 
 > Gợi ý: `status` đẹp hơn `isActive` vì UI dễ hiển thị màu sắc và badge.
+
+### 3.2.1 Cách nhận diện UI cho frontend
+
+Frontend nên dùng ưu tiên theo thứ tự:
+1. `uiLayoutHint`
+2. `sections[]`
+3. `questions[]` nếu muốn render kiểu cũ
+
+Ví dụ:
+- `uiLayoutHint = LITERATURE` → render kiểu đề Văn / nghị luận
+- `uiLayoutHint = MIXED` và `sections[]` có `MCQ` + `ESSAY` → render chia phần
+- `uiLayoutHint = ESSAY` → render toàn bộ dạng tự luận
+- `uiLayoutHint = STANDARD` → render layout mặc định
 
 ### 3.3 Quy tắc / hướng dẫn làm bài
 Nên có một khối riêng để hiển thị:
@@ -303,10 +361,28 @@ Mỗi câu nên có:
 - `orderIndex`
 - `questionContent`
 - `questionContentFormat`
+- `questionType` (để tách Phần I/II/III)
 - `url` (nếu có ảnh)
 - `score`
 - `options[]`
 - `contentSnapshot`
+
+### 3.5.1 Phần thi / sections
+Backend hiện có thể trả thêm `sections[]` để frontend render theo từng phần.
+
+Ví dụ nhóm câu hỏi theo `questionType`:
+- `Phần I - Trắc nghiệm`
+- `Phần II - Tự luận`
+
+Mỗi section gồm:
+- `sectionIndex`
+- `title`
+- `sectionType`
+- `questionCount`
+- `totalScore`
+- `startOrderIndex`
+- `endOrderIndex`
+- `questions[]`
 
 ### 3.6 Thông tin chấm & phản hồi
 Sau khi nộp bài có thể hiển thị:
@@ -315,12 +391,32 @@ Sau khi nộp bài có thể hiển thị:
 - feedback của AI/chấm thủ công
 - đáp án mẫu (nếu được phép hiển thị)
 
+### 3.6.1 Trả feedback đầy đủ
+
+Trong `answers[]`, backend hiện có thể trả:
+- `feedback`
+- `gradingMethod`
+
+Giá trị ví dụ:
+- `LOCAL`
+- `Chấm bằng Gemini AI`
+- `Chấm bằng GitHub Models`
+- `FALLBACK_FAILED`
+
 ### 3.7 Tiến độ làm bài
 Nếu muốn đẹp hơn ở UI:
 - số câu đã làm
 - số câu chưa làm
 - % hoàn thành
 - thời gian còn lại
+
+### 3.8 Mẫu hiển thị cho đề Văn / tự luận
+
+Nếu subject là Văn hoặc đề có nhiều tự luận, frontend có thể:
+- hiển thị `sections[]` thay vì chỉ list phẳng
+- render một phần riêng cho tự luận
+- hiển thị feedback của AI dưới mỗi câu
+- đổi style badge theo `uiLayoutHint = LITERATURE`
 
 ---
 
@@ -351,6 +447,28 @@ Nếu bạn muốn frontend render đẹp, có thể tách response thành các 
     "allowBackNavigation": true,
     "antiCheatEnabled": true
   },
+  "sections": [
+    {
+      "sectionIndex": 1,
+      "title": "Phần I - Trắc nghiệm",
+      "sectionType": "MCQ",
+      "questionCount": 18,
+      "totalScore": 18,
+      "startOrderIndex": 1,
+      "endOrderIndex": 18,
+      "questions": []
+    },
+    {
+      "sectionIndex": 2,
+      "title": "Phần II - Tự luận",
+      "sectionType": "ESSAY",
+      "questionCount": 2,
+      "totalScore": 2,
+      "startOrderIndex": 19,
+      "endOrderIndex": 20,
+      "questions": []
+    }
+  ],
   "scoringSummary": {
     "mcqCount": 18,
     "essayCount": 2,
@@ -360,6 +478,7 @@ Nếu bạn muốn frontend render đẹp, có thể tách response thành các 
     {
       "questionId": 101,
       "orderIndex": 1,
+      "questionType": "MCQ",
       "questionContent": "Câu 1?",
       "questionContentFormat": "TEXT",
       "score": 1.0,
@@ -438,7 +557,26 @@ Nếu muốn, có thể nâng cấp backend theo 2 hướng:
 ## 4. Notes
 
 - `ExamResponse.questions` là danh sách câu hỏi của đề, mỗi item gồm `questionId`, `questionContent`, `orderIndex`, `score`, `contentSnapshot`.
+- `ExamResponse.sections` là block nhóm câu theo phần/phân loại, dùng để render đề Văn / đề hỗn hợp đẹp hơn.
 - `QuestionResponse` có thêm `url` để FE gán ảnh minh họa cho câu hỏi.
 - Khi làm bài, FE nên lấy danh sách câu hỏi từ `GET /api/exams/{id}` trước, còn `POST /api/attempts/start` chỉ tạo lượt làm bài.
 - Khi dùng upload ảnh cho câu hỏi, client có thể lấy `url` từ API upload rồi gán vào `QuestionRequest.url`.
+
+---
+
+## 6. Các thay đổi mới cần biết
+
+### 6.1 AI grading
+- Gemini là ưu tiên 1
+- GitHub Models là fallback
+- AI có thể trả score dạng thập phân như `3.75 / 5`
+
+### 6.2 Answer response mới
+- `feedback`
+- `gradingMethod`
+
+### 6.3 Exam response mới
+- `uiLayoutHint`
+- `sections[]`
+- `questionType` trong từng câu hỏi
 

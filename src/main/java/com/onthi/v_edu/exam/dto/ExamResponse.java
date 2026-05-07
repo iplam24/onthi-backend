@@ -38,6 +38,11 @@ public class ExamResponse {
 
     private String type;
 
+    // UI hint for frontend rendering: STANDARD, LITERATURE, ESSAY, MIXED
+    private String uiLayoutHint;
+
+    private List<ExamSectionResponse> sections;
+
     private Boolean shuffleQuestions;
 
     private Boolean shuffleAnswers;

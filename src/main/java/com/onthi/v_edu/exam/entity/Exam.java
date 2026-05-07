@@ -48,6 +48,8 @@ public class Exam {
 
     private String type; // AUTO / MANUAL
 
+    private String uiLayoutHint;
+
     private Boolean shuffleQuestions;
     private Boolean shuffleAnswers;
 

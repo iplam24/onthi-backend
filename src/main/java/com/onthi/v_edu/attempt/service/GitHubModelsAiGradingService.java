@@ -181,11 +181,14 @@ public class GitHubModelsAiGradingService {
         - Nếu chỉ viết mở bài hoặc giới thiệu tác giả thì chỉ cho phần điểm phù hợp.
 
         PHẢN HỒI:
-        - feedback phải ngắn gọn, rõ ràng.
-        - Nêu được:
-          + điểm mạnh
-          + phần còn thiếu
-          + phần sai nếu có
+        - feedback phải chi tiết, mang tính xây dựng.
+        - Phải bao gồm các phần:
+          + Nhận xét tổng quát (Bài làm đạt yêu cầu hay chưa).
+          + Ưu điểm (Những ý đúng, kỹ năng viết, cách diễn đạt tốt).
+          + Nhược điểm/Thiếu sót (Những ý còn thiếu so với đáp án mẫu, lỗi lập luận, lỗi trình bày).
+          + Gợi ý cải thiện (Cách để đạt điểm tối đa).
+        - Sử dụng tiếng Việt tự nhiên, chuyên nghiệp.
+        - Không trả lời quá ngắn gọn kiểu "Tốt" hay "Thiếu ý".
 
         BẮT BUỘC:
         - Chỉ trả về JSON hợp lệ.
@@ -195,7 +198,7 @@ public class GitHubModelsAiGradingService {
         {
           "score": number,
           "isCorrect": boolean,
-          "feedback": "string"
+          "feedback": "string (bao gồm các phần nhận xét chi tiết, xuống dòng bằng \\n)"
         }
 
         CÂU HỎI:

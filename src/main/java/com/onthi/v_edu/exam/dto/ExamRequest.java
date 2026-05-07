@@ -32,6 +32,8 @@ public class ExamRequest {
 
     private String type;
 
+    private String uiLayoutHint;
+
     private Boolean shuffleQuestions;
 
     private Boolean shuffleAnswers;
@@ -40,4 +42,3 @@ public class ExamRequest {
 
     private List<@Valid ExamQuestionItemRequest> questions;
 }
-

@@ -25,5 +25,9 @@ public class AttemptAnswerResponse {
     private Boolean isCorrect;
 
     private Double score;
+
+    private String feedback;
+
+    private String gradingMethod;
 }
 

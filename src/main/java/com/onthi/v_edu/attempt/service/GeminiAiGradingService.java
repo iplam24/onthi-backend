@@ -134,11 +134,84 @@ public class GeminiAiGradingService {
     }
 
     private String buildGradingPrompt(String questionText, String studentAnswer, String sampleAnswer, double maxScore) {
-        return String.format(
-                "Chấm điểm bài làm dựa trên đáp án mẫu. Trả về JSON theo cấu trúc: " +
-                        "{\"score\": số thực, \"isCorrect\": boolean, \"feedback\": \"chuỗi\"}. " +
-                        "Câu hỏi: %s. Đáp án mẫu: %s. Bài làm: %s. Điểm tối đa: %.1f.",
-                questionText, sampleAnswer, studentAnswer, maxScore
+        return String.format("""
+        Bạn là giáo viên chấm bài tự luận nghiêm túc và công bằng.
+
+        NHIỆM VỤ:
+        - Chấm bài dựa trên đáp án mẫu.
+        - Cho điểm theo mức độ đúng và đầy đủ của bài làm.
+        - Chỉ chấm những ý học sinh thực sự viết.
+        - Không cộng điểm cho nội dung không tồn tại trong bài.
+        - Làm ít chấm ít, làm nhiều chấm nhiều.
+        - Nếu chỉ làm một phần thì chỉ cho điểm phần đó.
+        - Nếu chỉ có mở bài thì chỉ cho điểm mở bài.
+        - Nếu có mở bài + vài ý thân bài thì cộng điểm tương ứng.
+        - Không yêu cầu học sinh phải giống 100%% đáp án mẫu.
+        - Chấp nhận cách diễn đạt khác nhưng cùng ý nghĩa.
+        - Ưu tiên phát hiện ý đúng, từ khóa đúng, luận điểm đúng.
+        - Không chấm quá dễ.
+        - Không chấm quá khắt khe.
+        - Không cho điểm tối đa nếu bài thiếu ý quan trọng.
+        - Nếu học sinh viết lan man, sai trọng tâm hoặc bịa nội dung thì trừ điểm phù hợp.
+        - Nếu bài chỉ sao chép một phần nhỏ đáp án thì chỉ cho điểm tương ứng phần đó.
+
+        QUY TẮC CHẤM:
+        1. Xác định các ý chính trong đáp án mẫu.
+        2. Chia điểm theo từng ý.
+        3. So sánh bài học sinh với từng ý.
+        4. Ý nào đúng thì cộng điểm ý đó.
+        5. Ý nào thiếu thì không cộng điểm.
+        6. Ý sai hoặc trái nghĩa thì trừ nhẹ điểm nếu nghiêm trọng.
+        7. Có thể cho điểm lẻ như 0.25, 0.5, 0.75...
+        8. Tổng điểm tối đa là %.2f.
+
+        TRƯỜNG HỢP MÔN VĂN:
+        - Có thể chấm theo:
+          + mở bài
+          + thân bài
+          + kết bài
+          + phân tích nội dung
+          + nghệ thuật
+          + cảm nhận cá nhân hợp lý
+        - Học sinh làm tới đâu chấm tới đó.
+        - Không bắt buộc đúng từng chữ.
+        - Nếu phân tích đúng ý thơ, tác giả, hình tượng, biện pháp nghệ thuật thì cộng điểm tương ứng.
+        - Nếu chỉ viết mở bài hoặc giới thiệu tác giả thì chỉ cho phần điểm phù hợp.
+
+        PHẢN HỒI:
+        - feedback phải chi tiết, mang tính xây dựng.
+        - Phải bao gồm các phần:
+          + Nhận xét tổng quát (Bài làm đạt yêu cầu hay chưa).
+          + Ưu điểm (Những ý đúng, kỹ năng viết, cách diễn đạt tốt).
+          + Nhược điểm/Thiếu sót (Những ý còn thiếu so với đáp án mẫu, lỗi lập luận, lỗi trình bày).
+          + Gợi ý cải thiện (Cách để đạt điểm tối đa).
+        - Sử dụng tiếng Việt tự nhiên, chuyên nghiệp.
+        - Không trả lời quá ngắn gọn kiểu "Tốt" hay "Thiếu ý".
+
+        BẮT BUỘC:
+        - Chỉ trả về JSON hợp lệ.
+        - Không thêm giải thích ngoài JSON.
+        - Format JSON:
+
+        {
+          "score": number,
+          "isCorrect": boolean,
+          "feedback": "string (bao gồm các phần nhận xét chi tiết, xuống dòng bằng \\n)"
+        }
+
+        CÂU HỎI:
+        %s
+
+        ĐÁP ÁN MẪU:
+        %s
+
+        BÀI LÀM HỌC SINH:
+        %s
+        """,
+                maxScore,
+                questionText,
+                sampleAnswer,
+                studentAnswer
         );
     }
 
