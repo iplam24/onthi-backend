@@ -63,6 +63,7 @@ public class AttemptServiceImpl implements AttemptService {
     private final EssayAnswerRepository essayAnswerRepository;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final EssayGradingService essayGradingService;
 
     public AttemptServiceImpl(AttemptRepository attemptRepository,
                               AnswerRepository answerRepository,
@@ -71,7 +72,8 @@ public class AttemptServiceImpl implements AttemptService {
                               QuestionOptionRepository questionOptionRepository,
                               EssayAnswerRepository essayAnswerRepository,
                               UserRepository userRepository,
-                              UserService userService) {
+                              UserService userService,
+                              EssayGradingService essayGradingService) {
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.examRepository = examRepository;
@@ -80,6 +82,7 @@ public class AttemptServiceImpl implements AttemptService {
         this.essayAnswerRepository = essayAnswerRepository;
         this.userRepository = userRepository;
         this.userService = userService;
+        this.essayGradingService = essayGradingService;
     }
 
     @Override
@@ -253,12 +256,36 @@ public class AttemptServiceImpl implements AttemptService {
                 }
             } else {
                 System.out.println("  Loại câu hỏi: ESSAY (Tự luận)");
-                System.out.println("  => Kết quả: Cần chấm thủ công, điểm tạm tính là 0.");
-                        EssayAnswer sample = essayAnswerRepository.findByQuestion_IdAndDeletedAtIsNull(question.getId()).orElse(null);
-                answer.setSelectedOption(null);
-                answer.setIsCorrect(null);
-                answer.setScore(0d);
+                
+                // Lấy đáp án mẫu
+                EssayAnswer sample = essayAnswerRepository.findByQuestion_IdAndDeletedAtIsNull(question.getId()).orElse(null);
                 answer.setCorrectAnswerSnapshot(sample != null ? sample.getSampleAnswer() : null);
+                
+                // Sử dụng EssayGradingService để chấm điểm tự động/bán tự động
+                EssayGradingService.GradingResult gradingResult = essayGradingService.gradeEssay(answer, sample, questionScore);
+                System.out.println("  [ESSAY GRADING] " + gradingResult);
+                
+                answer.setSelectedOption(null);
+                
+                // Nếu chấm tự động
+                if (!gradingResult.isPending()) {
+                    answer.setScore(gradingResult.getScore() != null ? gradingResult.getScore() : 0d);
+                    answer.setIsCorrect(gradingResult.getIsCorrect());
+                    System.out.println("  => Tự động chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect());
+                    
+                    // Cộng điểm nếu đúng
+                    if (gradingResult.getIsCorrect() != null && gradingResult.getIsCorrect()) {
+                        correctCount++;
+                        totalScore += (gradingResult.getScore() != null ? gradingResult.getScore() : 0d);
+                    } else {
+                        wrongCount++;
+                    }
+                } else {
+                    // Nếu cần chấm thủ công
+                    answer.setScore(0d);  // Tạm điểm 0
+                    answer.setIsCorrect(null);  // Đánh dấu là chưa chấm
+                    System.out.println("  => Cần chấm thủ công, điểm tạm tính là 0.");
+                }
             }
 
             answersToSave.add(answer);
