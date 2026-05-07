@@ -64,6 +64,8 @@ public class AttemptServiceImpl implements AttemptService {
     private final UserRepository userRepository;
     private final UserService userService;
     private final EssayGradingService essayGradingService;
+    private final GeminiAiGradingService geminiAiGradingService;
+    private final GitHubModelsAiGradingService gitHubModelsAiGradingService;
 
     public AttemptServiceImpl(AttemptRepository attemptRepository,
                               AnswerRepository answerRepository,
@@ -73,7 +75,9 @@ public class AttemptServiceImpl implements AttemptService {
                               EssayAnswerRepository essayAnswerRepository,
                               UserRepository userRepository,
                               UserService userService,
-                              EssayGradingService essayGradingService) {
+                              EssayGradingService essayGradingService,
+                              GeminiAiGradingService geminiAiGradingService,
+                              GitHubModelsAiGradingService gitHubModelsAiGradingService) {
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.examRepository = examRepository;
@@ -83,6 +87,8 @@ public class AttemptServiceImpl implements AttemptService {
         this.userRepository = userRepository;
         this.userService = userService;
         this.essayGradingService = essayGradingService;
+        this.geminiAiGradingService = geminiAiGradingService;
+        this.gitHubModelsAiGradingService = gitHubModelsAiGradingService;
     }
 
     @Override
@@ -273,18 +279,72 @@ public class AttemptServiceImpl implements AttemptService {
                     answer.setIsCorrect(gradingResult.getIsCorrect());
                     System.out.println("  => Tự động chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect());
                     
-                    // Cộng điểm nếu đúng
+                    double awardedScore = gradingResult.getScore() != null ? gradingResult.getScore() : 0d;
+                    totalScore += awardedScore;
+
+                    // Đúng hoàn toàn thì tính là đúng; sai hẳn (0 điểm) mới tính sai
                     if (gradingResult.getIsCorrect() != null && gradingResult.getIsCorrect()) {
                         correctCount++;
-                        totalScore += (gradingResult.getScore() != null ? gradingResult.getScore() : 0d);
-                    } else {
+                    } else if (awardedScore <= 0d) {
                         wrongCount++;
                     }
                 } else {
-                    // Nếu cần chấm thủ công
-                    answer.setScore(0d);  // Tạm điểm 0
-                    answer.setIsCorrect(null);  // Đánh dấu là chưa chấm
-                    System.out.println("  => Cần chấm thủ công, điểm tạm tính là 0.");
+                    // Nếu cần chấm (>= 50 ký tự): Gọi Gemini AI
+                    System.out.println("  => Đáp án dài, gọi Gemini AI chấm...");
+                    
+                    String sampleAnswerText = sample != null ? sample.getSampleAnswer() : "";
+                    GeminiAiGradingService.AiGradingResult aiResult = geminiAiGradingService.gradeWithGemini(
+                            question.getContent(),
+                            submitted.getEssayAnswer(),
+                            sampleAnswerText,
+                            questionScore
+                    );
+                    System.out.println("  [GEMINI RESULT] " + aiResult);
+                    
+                    if (aiResult.getScore() != null) {
+                        // Chấm thành công từ Gemini
+                        answer.setScore(aiResult.getScore());
+                        answer.setIsCorrect(aiResult.getIsCorrect());
+                        System.out.println("  => Gemini chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect() + ", Feedback = " + aiResult.getFeedback());
+
+                        totalScore += aiResult.getScore();
+                        
+                        // Đúng hoàn toàn thì tính là đúng; sai hẳn (0 điểm) mới tính sai
+                        if (aiResult.getIsCorrect() != null && aiResult.getIsCorrect()) {
+                            correctCount++;
+                        } else if (aiResult.getScore() <= 0d) {
+                            wrongCount++;
+                        }
+                    } else {
+                        // Gemini không chấm được -> fallback sang GitHub Models
+                        System.out.println("  => Gemini không chấm được, gọi GitHub Models fallback...");
+                        GitHubModelsAiGradingService.AiGradingResult fallbackResult = gitHubModelsAiGradingService.gradeWithGitHubModels(
+                                question.getContent(),
+                                submitted.getEssayAnswer(),
+                                sampleAnswerText,
+                                questionScore
+                        );
+                        System.out.println("  [GITHUB MODELS RESULT] " + fallbackResult);
+
+                        if (fallbackResult.getScore() != null) {
+                            answer.setScore(fallbackResult.getScore());
+                            answer.setIsCorrect(fallbackResult.getIsCorrect());
+                            System.out.println("  => GitHub Models chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect() + ", Feedback = " + fallbackResult.getFeedback());
+
+                            totalScore += fallbackResult.getScore();
+
+                            if (fallbackResult.getIsCorrect() != null && fallbackResult.getIsCorrect()) {
+                                correctCount++;
+                            } else if (fallbackResult.getScore() <= 0d) {
+                                wrongCount++;
+                            }
+                        } else {
+                            // Cả Gemini và GitHub Models đều lỗi, giữ nguyên trạng thái tạm
+                            answer.setScore(0d);
+                            answer.setIsCorrect(null);
+                            System.out.println("  => Cả Gemini và GitHub Models đều lỗi, điểm tạm tính là 0.");
+                        }
+                    }
                 }
             }
 

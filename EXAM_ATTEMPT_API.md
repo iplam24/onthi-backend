@@ -259,6 +259,132 @@ Tài liệu riêng cho luồng **ôn thi / làm đề**.
 - `flagged`
 - `answers[]`
 
+---
+
+## 3. Gợi ý các phần nên có trong chi tiết đề thi
+
+Để trang/response đề thi nhìn **đầy đủ và "xịn" hơn**, có thể chia thành các block sau:
+
+### 3.1 Tổng quan đề thi
+- `title`: tên đề
+- `subjectName`: môn học
+- `type`: trắc nghiệm / tự luận / hỗn hợp
+- `totalScore`: tổng điểm
+- `duration`: thời gian làm bài
+- `maxAttempts`: số lần làm tối đa
+
+### 3.2 Thời gian & trạng thái
+- `isActive`: đang mở hay không
+- `startTime`: thời gian bắt đầu
+- `endTime`: thời gian kết thúc
+- `status`: `DRAFT` / `SCHEDULED` / `ACTIVE` / `EXPIRED` / `ARCHIVED`
+
+> Gợi ý: `status` đẹp hơn `isActive` vì UI dễ hiển thị màu sắc và badge.
+
+### 3.3 Quy tắc / hướng dẫn làm bài
+Nên có một khối riêng để hiển thị:
+- cách tính điểm
+- có được quay lại câu trước không
+- có trộn câu / trộn đáp án không
+- lưu ý về nộp bài
+- cảnh báo tab switch / vi phạm nếu có
+
+### 3.4 Phân bố điểm
+Nên hiển thị:
+- số câu hỏi
+- số câu trắc nghiệm
+- số câu tự luận
+- điểm từng câu hoặc theo cụm
+- câu nào quan trọng / câu nào bonus (nếu có)
+
+### 3.5 Danh sách câu hỏi
+Mỗi câu nên có:
+- `questionId`
+- `orderIndex`
+- `questionContent`
+- `questionContentFormat`
+- `url` (nếu có ảnh)
+- `score`
+- `options[]`
+- `contentSnapshot`
+
+### 3.6 Thông tin chấm & phản hồi
+Sau khi nộp bài có thể hiển thị:
+- câu đúng / sai
+- điểm đạt được
+- feedback của AI/chấm thủ công
+- đáp án mẫu (nếu được phép hiển thị)
+
+### 3.7 Tiến độ làm bài
+Nếu muốn đẹp hơn ở UI:
+- số câu đã làm
+- số câu chưa làm
+- % hoàn thành
+- thời gian còn lại
+
+---
+
+## 4. Mẫu response "đề thi đẹp" hơn
+
+Nếu bạn muốn frontend render đẹp, có thể tách response thành các block như sau:
+
+```json
+{
+  "id": 1,
+  "title": "Đề thi thử THPT Quốc Gia 2024",
+  "overview": {
+    "subjectName": "Toán",
+    "type": "MIXED",
+    "totalScore": 10,
+    "duration": 90,
+    "maxAttempts": 1
+  },
+  "timeInfo": {
+    "isActive": true,
+    "startTime": null,
+    "endTime": null,
+    "status": "ACTIVE"
+  },
+  "rules": {
+    "shuffleQuestions": true,
+    "shuffleAnswers": true,
+    "allowBackNavigation": true,
+    "antiCheatEnabled": true
+  },
+  "scoringSummary": {
+    "mcqCount": 18,
+    "essayCount": 2,
+    "questionCount": 20
+  },
+  "questions": [
+    {
+      "questionId": 101,
+      "orderIndex": 1,
+      "questionContent": "Câu 1?",
+      "questionContentFormat": "TEXT",
+      "score": 1.0,
+      "options": []
+    }
+  ]
+}
+```
+
+---
+
+## 5. Gợi ý triển khai tiếp theo
+
+Nếu muốn, có thể nâng cấp backend theo 2 hướng:
+
+1. **Giữ nguyên DTO hiện tại** nhưng frontend tự render theo từng section.
+2. **Tạo DTO mới** như `ExamDetailResponse` để trả về các block:
+   - `overview`
+   - `timeInfo`
+   - `rules`
+   - `scoringSummary`
+   - `questions`
+
+> Nếu bạn muốn mình làm luôn, mình có thể sửa `ExamResponse` và `ExamServiceImpl` để trả format đẹp hơn thay vì chỉ là field phẳng.
+
 ### 2.4 Get my attempts
 
 - **Method:** `GET`

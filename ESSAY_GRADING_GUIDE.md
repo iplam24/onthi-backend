@@ -457,3 +457,26 @@ void testNoMatch() {
 
 **Cập nhật:** 2026-05-07
 
+---
+
+## 12. AI Fallback: GitHub Models
+
+Khi Gemini bị lỗi quota / 429 / không thể chấm, hệ thống sẽ fallback sang GitHub Models nếu bạn cấu hình:
+
+```properties
+app.github-models.api-key=${GITHUB_MODELS_API_KEY:${GITHUB_TOKEN:}}
+app.github-models.endpoint=https://models.github.ai/inference/chat/completions
+app.github-models.model=gpt-4o
+app.github-models.enabled=true
+```
+
+### Thứ tự chấm
+1. Gemini
+2. GitHub Models fallback
+3. Nếu cả hai lỗi → lưu tạm `score=0`, `isCorrect=null`
+
+### Ghi chú
+- Không hardcode API key trong source
+- Ưu tiên dùng biến môi trường
+- Nếu lộ secret, hãy revoke/rotate ngay
+

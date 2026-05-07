@@ -124,7 +124,7 @@ CREATE TABLE question_options (
 CREATE TABLE essay_answers (
                                id INT AUTO_INCREMENT PRIMARY KEY,
                                question_id INT,
-                               sample_answer TEXT,
+                               sample_answer LONGTEXT,
                                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -160,7 +160,7 @@ CREATE TABLE user_question_options (
 CREATE TABLE user_essay_answers (
                                     id INT AUTO_INCREMENT PRIMARY KEY,
                                     question_id INT,
-                                    sample_answer TEXT,
+                                    sample_answer LONGTEXT,
                                     FOREIGN KEY (question_id) REFERENCES user_questions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

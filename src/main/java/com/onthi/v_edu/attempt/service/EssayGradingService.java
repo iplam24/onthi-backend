@@ -59,50 +59,50 @@ public class EssayGradingService {
             // Nếu không có đáp án mẫu: chấm 0
             if (sampleAnswer == null || sampleAnswer.getSampleAnswer() == null) {
                 return new GradingResult(
-                        0d,                                                              
-                        false,                                                           
-                        false,                                                           
-                        String.format("Đáp án (%d ký tự), không có đáp án mẫu để so sánh", 
-                                      answerLength),                
-                        null                                                             
+                        0d,
+                        false,
+                        false,
+                        String.format("Đáp án (%d ký tự), không có đáp án mẫu để so sánh",
+                                      answerLength),
+                        null
                 );
             }
 
             // So sánh với đáp án mẫu
             String sampleText = sampleAnswer.getSampleAnswer().trim();
             boolean isMatching = compareAnswers(trimmedAnswer, sampleText);
-            
+
             if (isMatching) {
                 // Đáp án giống với đáp án mẫu: cho đúng (full điểm)
                 return new GradingResult(
-                        questionScore,                                                   
-                        true,                                                            
-                        false,                                                           
-                        String.format("Đáp án (%d ký tự) khớp với mẫu", 
-                                      answerLength),                                      
-                        null                                                             
+                        questionScore,
+                        true,
+                        false,
+                        String.format("Đáp án (%d ký tự) khớp với mẫu",
+                                      answerLength),
+                        null
                 );
             } else {
                 // Đáp án không khớp: chấm 0
                 return new GradingResult(
-                        0d,                                                            
-                        false,                                                         
-                        false,                                                         
-                        String.format("Đáp án (%d ký tự) không khớp với mẫu", 
-                                      answerLength),                                     
-                        null                                                            
+                        0d,
+                        false,
+                        false,
+                        String.format("Đáp án (%d ký tự) không khớp với mẫu",
+                                      answerLength),
+                        null
                 );
             }
         }
 
         // Nếu đáp án >= 50 ký tự: pending (xử lí sau)
         return new GradingResult(
-                null,                                                            
-                null,                                                            
-                true,                                                            
-                String.format("Đáp án dài (%d ký tự >= %d), cần xử lí sau", 
-                              answerLength, CHARACTER_THRESHOLD),                                      
-                true                                                             
+                null,
+                null,
+                true,
+                String.format("Đáp án dài (%d ký tự >= %d), cần xử lí sau",
+                              answerLength, CHARACTER_THRESHOLD),
+                true
         );
     }
 
@@ -138,7 +138,7 @@ public class EssayGradingService {
         private final String reason;                 // Lý do chấm
         private final Boolean manualGradeRequired;   // Flag cho biết cần chấm thủ công
 
-        public GradingResult(Double score, Boolean isCorrect, boolean isPending, 
+        public GradingResult(Double score, Boolean isCorrect, boolean isPending,
                            String reason, Boolean manualGradeRequired) {
             this.score = score;
             this.isCorrect = isCorrect;
