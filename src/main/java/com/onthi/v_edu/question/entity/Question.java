@@ -34,6 +34,7 @@ public class Question {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
 
     @Enumerated(EnumType.STRING)

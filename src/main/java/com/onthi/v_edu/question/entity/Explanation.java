@@ -30,6 +30,7 @@ public class Explanation {
     @JoinColumn(name = "question_id")
     private Question question;
     @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
     @Column(name = "created_at")
     private LocalDateTime createdAt;

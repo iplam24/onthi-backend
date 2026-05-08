@@ -29,6 +29,7 @@ public class QuestionOption {
     @JoinColumn(name = "question_id")
     private Question question;
     @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
     @Column(name = "is_correct")
     private Boolean isCorrect;
