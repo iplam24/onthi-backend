@@ -6,10 +6,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface EssayAnswerRepository extends JpaRepository<EssayAnswer, Integer> {
 	Optional<EssayAnswer> findByQuestion_IdAndDeletedAtIsNull(Integer questionId);
+
+	List<EssayAnswer> findByQuestion_IdInAndDeletedAtIsNull(Collection<Integer> questionIds);
 
 	@Modifying
 	@Query("update EssayAnswer ea set ea.deletedAt = current_timestamp where ea.question.id = :questionId and ea.deletedAt is null")

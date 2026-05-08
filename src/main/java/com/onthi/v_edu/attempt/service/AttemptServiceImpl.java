@@ -66,6 +66,7 @@ public class AttemptServiceImpl implements AttemptService {
     private final EssayGradingService essayGradingService;
     private final GeminiAiGradingService geminiAiGradingService;
     private final GitHubModelsAiGradingService gitHubModelsAiGradingService;
+    private final AttemptAsyncGradingService attemptAsyncGradingService;
 
     public AttemptServiceImpl(AttemptRepository attemptRepository,
                               AnswerRepository answerRepository,
@@ -77,7 +78,8 @@ public class AttemptServiceImpl implements AttemptService {
                               UserService userService,
                               EssayGradingService essayGradingService,
                               GeminiAiGradingService geminiAiGradingService,
-                              GitHubModelsAiGradingService gitHubModelsAiGradingService) {
+                              GitHubModelsAiGradingService gitHubModelsAiGradingService,
+                              AttemptAsyncGradingService attemptAsyncGradingService) {
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.examRepository = examRepository;
@@ -89,6 +91,7 @@ public class AttemptServiceImpl implements AttemptService {
         this.essayGradingService = essayGradingService;
         this.geminiAiGradingService = geminiAiGradingService;
         this.gitHubModelsAiGradingService = gitHubModelsAiGradingService;
+        this.attemptAsyncGradingService = attemptAsyncGradingService;
     }
 
     @Override
@@ -149,248 +152,123 @@ public class AttemptServiceImpl implements AttemptService {
 
     @Override
     public ApiResponse<AttemptDetailResponse> submitAttempt(Integer attemptId, AttemptSubmitRequest request) {
-        System.out.println("\n--- [DEBUG] AttemptService.submitAttempt ---");
-        System.out.println("Attempt ID: " + attemptId);
+        try {
+            System.out.println("\n--- [DEBUG] AttemptService.submitAttempt ---");
+            System.out.println("Attempt ID: " + attemptId);
 
-        User currentUser = getCurrentUser();
-        if (currentUser == null) {
-            System.out.println("[DEBUG] Lỗi: Người dùng chưa đăng nhập.");
-            return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để nộp bài!");
-        }
-        System.out.println("User: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
+            User currentUser = getCurrentUser();
+            if (currentUser == null) {
+                System.out.println("[DEBUG] Lỗi: Người dùng chưa đăng nhập.");
+                return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập để nộp bài!");
+            }
+            System.out.println("User: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
 
-        Attempt attempt = attemptRepository.findByIdAndUser_Id(attemptId, currentUser.getId()).orElse(null);
-        if (attempt == null) {
-            System.out.println("[DEBUG] Lỗi: Không tìm thấy lượt làm bài với ID: " + attemptId + " cho user này.");
-            return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy lượt làm bài!");
-        }
-        System.out.println("Tìm thấy lượt làm bài. Trạng thái hiện tại: " + attempt.getStatus());
+            Attempt attempt = attemptRepository.findByIdAndUser_Id(attemptId, currentUser.getId()).orElse(null);
+            if (attempt == null) {
+                System.out.println("[DEBUG] Lỗi: Không tìm thấy lượt làm bài với ID: " + attemptId + " cho user này.");
+                return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy lượt làm bài!");
+            }
+            System.out.println("Tìm thấy lượt làm bài. Trạng thái hiện tại: " + attempt.getStatus());
 
-        if (attempt.getStatus() == AttemptStatus.SUBMITTED) {
-            System.out.println("[DEBUG] Lỗi: Lượt làm bài đã nộp trước đó.");
-            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Lượt làm bài này đã được nộp trước đó!");
-        }
-        if (attempt.getStatus() == AttemptStatus.EXPIRED) {
-            System.out.println("[DEBUG] Lỗi: Lượt làm bài đã hết hạn.");
-            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Lượt làm bài này đã hết hạn!");
-        }
+            if (attempt.getStatus() == AttemptStatus.SUBMITTED) {
+                System.out.println("[DEBUG] Lỗi: Lượt làm bài đã nộp trước đó.");
+                return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Lượt làm bài này đã được nộp trước đó!");
+            }
+            if (attempt.getStatus() == AttemptStatus.EXPIRED) {
+                System.out.println("[DEBUG] Lỗi: Lượt làm bài đã hết hạn.");
+                return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Lượt làm bài này đã hết hạn!");
+            }
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime deadline = calculateDeadline(attempt);
-        if (deadline != null && !now.isBefore(deadline)) {
-            System.out.println("[DEBUG] Lỗi: Đã hết thời gian làm bài.");
-            expireAttempt(attempt, now);
-            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đã hết thời gian làm bài, không thể nộp!");
-        }
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime deadline = calculateDeadline(attempt);
+            if (deadline != null && !now.isBefore(deadline)) {
+                System.out.println("[DEBUG] Lỗi: Đã hết thời gian làm bài.");
+                expireAttempt(attempt, now);
+                return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đã hết thời gian làm bài, không thể nộp!");
+            }
 
             List<ExamQuestion> examQuestions = examQuestionRepository.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(attempt.getExam().getId());
-        Map<Integer, ExamQuestion> examQuestionMap = new HashMap<>();
-        for (ExamQuestion examQuestion : examQuestions) {
-            Question question = examQuestion.getQuestion();
-            if (question != null) {
-                examQuestionMap.put(question.getId(), examQuestion);
-            }
-        }
-
-        List<AttemptSubmitAnswerRequest> submittedAnswers = request.getAnswers() == null
-                ? Collections.emptyList()
-                : request.getAnswers();
-        System.out.println("Số câu trả lời nhận được: " + submittedAnswers.size());
-
-        String antiCheatError = validateSubmissionPayload(submittedAnswers, examQuestionMap);
-        if (antiCheatError != null) {
-            System.out.println("[DEBUG] Lỗi validateSubmissionPayload: " + antiCheatError);
-            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), antiCheatError);
-        }
-
-        answerRepository.deleteByAttempt_Id(attempt.getId());
-
-        double totalScore = 0d;
-        int correctCount = 0;
-        int wrongCount = 0;
-        List<Answer> answersToSave = new ArrayList<>();
-
-        System.out.println("\n  [DEBUG] Bắt đầu chấm điểm...");
-        for (AttemptSubmitAnswerRequest submitted : submittedAnswers) {
-            System.out.println("  ------------------------------------");
-            System.out.println("  Chấm câu hỏi ID: " + submitted.getQuestionId());
-
-            ExamQuestion examQuestion = examQuestionMap.get(submitted.getQuestionId());
-            if (examQuestion == null || examQuestion.getQuestion() == null) {
-                System.out.println("  [DEBUG] -> Bỏ qua vì không tìm thấy câu hỏi trong đề thi.");
-                continue;
+            Map<Integer, ExamQuestion> examQuestionMap = new HashMap<>();
+            for (ExamQuestion examQuestion : examQuestions) {
+                Question question = examQuestion.getQuestion();
+                if (question != null) {
+                    examQuestionMap.put(question.getId(), examQuestion);
+                }
             }
 
-            Question question = examQuestion.getQuestion();
-            double questionScore = examQuestion.getScore() == null ? 1d : examQuestion.getScore();
-            System.out.println("  Điểm của câu hỏi: " + questionScore);
+            List<AttemptSubmitAnswerRequest> submittedAnswers = request.getAnswers() == null
+                    ? Collections.emptyList()
+                    : request.getAnswers();
+            System.out.println("Số câu trả lời nhận được: " + submittedAnswers.size());
 
-            Answer answer = new Answer();
-            answer.setAttempt(attempt);
-            answer.setQuestion(question);
-            answer.setEssayAnswer(normalize(submitted.getEssayAnswer()));
-            answer.setQuestionSnapshot(question.getContent());
-            answer.setQuestionFormatSnapshot(question.getContentFormat());
-            answer.setCreatedAt(now);
-            answer.setUpdatedAt(now);
+            // Xóa câu trả lời cũ
+            answerRepository.deleteByAttempt_Id(attempt.getId());
 
-            if (question.getType() == QuestionType.MCQ) {
-                System.out.println("  Loại câu hỏi: MCQ");
-                Integer selectedOptionId = submitted.getSelectedOptionId();
-                System.out.println("  Người dùng chọn option ID: " + selectedOptionId);
+            List<Answer> answersToSave = new ArrayList<>();
 
-                QuestionOption selectedOption = resolveSelectedOption(question.getId(), selectedOptionId);
-                        QuestionOption correctOption = questionOptionRepository.findFirstByQuestion_IdAndIsCorrectTrueAndDeletedAtIsNull(question.getId()).orElse(null);
-                
-                if (correctOption == null) {
-                    System.out.println("  [DEBUG] -> Lỗi DB: Không tìm thấy đáp án đúng cho câu hỏi này trong database!");
-                } else {
-                    System.out.println("  Đáp án đúng là option ID: " + correctOption.getId());
-                }
+            System.out.println("\n  [DEBUG] Lưu tạm các câu trả lời để chờ AI chấm...");
+            for (AttemptSubmitAnswerRequest submitted : submittedAnswers) {
+                ExamQuestion examQuestion = examQuestionMap.get(submitted.getQuestionId());
+                if (examQuestion == null || examQuestion.getQuestion() == null) continue;
 
-                boolean isCorrect = selectedOption != null && correctOption != null
-                        && selectedOption.getId().equals(correctOption.getId());
-                System.out.println("  => Kết quả: " + (isCorrect ? "ĐÚNG" : "SAI"));
+                Question question = examQuestion.getQuestion();
 
-                answer.setSelectedOption(selectedOption);
-                answer.setIsCorrect(isCorrect);
-                answer.setScore(isCorrect ? questionScore : 0d);
-                answer.setCorrectAnswerSnapshot(correctOption != null ? correctOption.getContent() : null);
+                Answer answer = new Answer();
+                answer.setAttempt(attempt);
+                answer.setQuestion(question);
+                answer.setEssayAnswer(normalize(submitted.getEssayAnswer()));
+                answer.setQuestionSnapshot(question.getContent());
+                answer.setQuestionFormatSnapshot(question.getContentFormat());
+                answer.setCreatedAt(now);
+                answer.setUpdatedAt(now);
 
-                if (isCorrect) {
-                    correctCount++;
-                    totalScore += questionScore;
-                } else {
-                    wrongCount++;
-                }
-            } else {
-                System.out.println("  Loại câu hỏi: ESSAY (Tự luận)");
-                
-                // Lấy đáp án mẫu
-                EssayAnswer sample = essayAnswerRepository.findByQuestion_IdAndDeletedAtIsNull(question.getId()).orElse(null);
-                answer.setCorrectAnswerSnapshot(sample != null ? sample.getSampleAnswer() : null);
-                
-                // Sử dụng EssayGradingService để chấm điểm tự động/bán tự động
-                EssayGradingService.GradingResult gradingResult = essayGradingService.gradeEssay(answer, sample, questionScore);
-                System.out.println("  [ESSAY GRADING] " + gradingResult);
-                
-                answer.setSelectedOption(null);
-                
-                // Nếu chấm tự động
-                if (!gradingResult.isPending()) {
-                    answer.setScore(gradingResult.getScore() != null ? gradingResult.getScore() : 0d);
-                    answer.setIsCorrect(gradingResult.getIsCorrect());
-                    answer.setAiFeedback(gradingResult.getReason());
-                    answer.setAiGradingMethod("LOCAL");
-                    System.out.println("  => Tự động chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect());
-                    
-                    double awardedScore = gradingResult.getScore() != null ? gradingResult.getScore() : 0d;
-                    totalScore += awardedScore;
-
-                    // Đúng hoàn toàn thì tính là đúng; sai hẳn (0 điểm) mới tính sai
-                    if (gradingResult.getIsCorrect() != null && gradingResult.getIsCorrect()) {
-                        correctCount++;
-                    } else if (awardedScore <= 0d) {
-                        wrongCount++;
-                    }
-                } else {
-                    // Nếu cần chấm (>= 50 ký tự): Gọi Gemini AI
-                    System.out.println("  => Đáp án dài, gọi Gemini AI chấm...");
-                    
-                    String sampleAnswerText = sample != null ? sample.getSampleAnswer() : "";
-                    GeminiAiGradingService.AiGradingResult aiResult = geminiAiGradingService.gradeWithGemini(
-                            question.getContent(),
-                            submitted.getEssayAnswer(),
-                            sampleAnswerText,
-                            questionScore
-                    );
-                    System.out.println("  [GEMINI RESULT] " + aiResult);
-                    
-                    if (aiResult.getScore() != null) {
-                        // Chấm thành công từ Gemini
-                        answer.setScore(aiResult.getScore());
-                        answer.setIsCorrect(aiResult.getIsCorrect());
-                        answer.setAiFeedback(aiResult.getFeedback());
-                        answer.setAiGradingMethod(aiResult.getGradingMethod());
-                        System.out.println("  => Gemini chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect() + ", Feedback = " + aiResult.getFeedback());
-
-                        totalScore += aiResult.getScore();
-                        
-                        // Đúng hoàn toàn thì tính là đúng; sai hẳn (0 điểm) mới tính sai
-                        if (aiResult.getIsCorrect() != null && aiResult.getIsCorrect()) {
-                            correctCount++;
-                        } else if (aiResult.getScore() <= 0d) {
-                            wrongCount++;
-                        }
-                    } else {
-                        // Gemini không chấm được -> fallback sang GitHub Models
-                        System.out.println("  => Gemini không chấm được, gọi GitHub Models fallback...");
-                        GitHubModelsAiGradingService.AiGradingResult fallbackResult = gitHubModelsAiGradingService.gradeWithGitHubModels(
-                                question.getContent(),
-                                submitted.getEssayAnswer(),
-                                sampleAnswerText,
-                                questionScore
-                        );
-                        System.out.println("  [GITHUB MODELS RESULT] " + fallbackResult);
-
-                        if (fallbackResult.getScore() != null) {
-                            answer.setScore(fallbackResult.getScore());
-                            answer.setIsCorrect(fallbackResult.getIsCorrect());
-                            answer.setAiFeedback(fallbackResult.getFeedback());
-                            answer.setAiGradingMethod(fallbackResult.getGradingMethod());
-                            System.out.println("  => GitHub Models chấm: Score = " + answer.getScore() + ", Correct = " + answer.getIsCorrect() + ", Feedback = " + fallbackResult.getFeedback());
-
-                            totalScore += fallbackResult.getScore();
-
-                            if (fallbackResult.getIsCorrect() != null && fallbackResult.getIsCorrect()) {
-                                correctCount++;
-                            } else if (fallbackResult.getScore() <= 0d) {
-                                wrongCount++;
-                            }
-                        } else {
-                            // Cả Gemini và GitHub Models đều lỗi, giữ nguyên trạng thái tạm
-                            answer.setScore(0d);
-                            answer.setIsCorrect(null);
-                            answer.setAiFeedback("Không thể chấm tự động do Gemini/GitHub Models đều lỗi");
-                            answer.setAiGradingMethod("FALLBACK_FAILED");
-                            System.out.println("  => Cả Gemini và GitHub Models đều lỗi, điểm tạm tính là 0.");
-                        }
+                if (question.getType() == QuestionType.MCQ) {
+                    Integer selectedOptionId = submitted.getSelectedOptionId();
+                    if (selectedOptionId != null) {
+                        // Chỉ lưu reference, không cần query đúng/sai ở đây để tối ưu tốc độ
+                        QuestionOption selectedOption = new QuestionOption();
+                        selectedOption.setId(selectedOptionId);
+                        answer.setSelectedOption(selectedOption);
                     }
                 }
+                
+                // Các trường score, isCorrect, aiFeedback sẽ được cập nhật bởi AsyncGradingService
+                answer.setAiFeedback("Đang trong quá trình chấm điểm...");
+                answer.setAiGradingMethod("PENDING");
+                
+                answersToSave.add(answer);
             }
 
-            answersToSave.add(answer);
+            answerRepository.saveAll(answersToSave);
+            
+            int tabSwitchCount = safeNonNegative(request.getTabSwitchCount());
+            int violationScore = safeNonNegative(request.getViolationScore());
+
+            // Chuyển trạng thái sang GRADING và lưu lại
+            attempt.setStatus(AttemptStatus.GRADING);
+            attempt.setScore(0.0); // Reset điểm chờ chấm xong
+            attempt.setCorrectCount(0);
+            attempt.setWrongCount(0);
+            attempt.setTotalQuestions(examQuestions.size());
+            attempt.setDurationTaken(calculateDurationSeconds(attempt.getStartedAt(), now));
+            attempt.setSubmittedAt(now);
+            attempt.setTabSwitchCount(tabSwitchCount);
+            attempt.setViolationScore(violationScore);
+            attempt.setFlagged(tabSwitchCount >= TAB_SWITCH_FLAG_THRESHOLD || violationScore >= VIOLATION_SCORE_FLAG_THRESHOLD);
+            attemptRepository.save(attempt);
+            
+            userService.recordStudyActivity(currentUser.getId(), now.toLocalDate());
+
+            System.out.println("  [DEBUG] Đã nộp bài thành công. Lượt làm bài ID: " + attempt.getId() + " đang ở trạng thái GRADING.");
+            System.out.println("  [DEBUG] Server sẽ tự động chấm bài trong vài giây tới qua Scheduler.");
+            
+            return new ApiResponse<>(HttpStatus.OK.value(), "Nộp bài thành công! Bài làm của bạn đã được đưa vào hàng chờ chấm điểm tự động.", toAttemptDetailResponse(attempt));
+            
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Lỗi trong submitAttempt: " + e.getMessage());
+            e.printStackTrace();
+            return new ApiResponse<>(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Lỗi hệ thống khi nộp bài: " + e.getMessage());
         }
-        System.out.println("  ------------------------------------");
-        System.out.println("  [DEBUG] Chấm điểm hoàn tất.");
-
-        answerRepository.saveAll(answersToSave);
-        System.out.println("Lưu " + answersToSave.size() + " câu trả lời vào database.");
-
-        int tabSwitchCount = safeNonNegative(request.getTabSwitchCount());
-        int violationScore = safeNonNegative(request.getViolationScore());
-
-        attempt.setStatus(AttemptStatus.SUBMITTED);
-        attempt.setScore(totalScore);
-        attempt.setCorrectCount(correctCount);
-        attempt.setWrongCount(wrongCount);
-        attempt.setTotalQuestions(examQuestions.size());
-        attempt.setDurationTaken(calculateDurationSeconds(attempt.getStartedAt(), now));
-        attempt.setSubmittedAt(now);
-        attempt.setTabSwitchCount(tabSwitchCount);
-        attempt.setViolationScore(violationScore);
-        attempt.setFlagged(tabSwitchCount >= TAB_SWITCH_FLAG_THRESHOLD || violationScore >= VIOLATION_SCORE_FLAG_THRESHOLD);
-        attemptRepository.save(attempt);
-        userService.recordStudyActivity(currentUser.getId(), now.toLocalDate());
-
-        System.out.println("\nKết quả cuối cùng:");
-        System.out.println("  - Tổng điểm: " + totalScore);
-        System.out.println("  - Số câu đúng: " + correctCount);
-        System.out.println("  - Số câu sai: " + wrongCount);
-        System.out.println("Lưu kết quả vào lượt làm bài ID: " + attempt.getId());
-        System.out.println("--- [DEBUG] Kết thúc submitAttempt ---\n");
-
-        return new ApiResponse<>(HttpStatus.OK.value(), "Nộp bài thành công!", toAttemptDetailResponse(attempt));
     }
 
     @Override

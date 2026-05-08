@@ -40,7 +40,7 @@ public class Attempt {
     private Exam exam;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status")
+    @Column(name = "status", length = 50)
     private AttemptStatus status;
 
     private Double score;

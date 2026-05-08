@@ -1,5 +1,7 @@
 package com.onthi.v_edu.attempt.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,9 +12,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Fallback chấm bài bằng GitHub Models (OpenAI-compatible API).
@@ -36,7 +40,59 @@ public class GitHubModelsAiGradingService {
     @Value("${app.github-models.enabled:true}")
     private boolean enabled;
 
-    public AiGradingResult gradeWithGitHubModels(String questionText, String studentAnswer, String sampleAnswer, double maxScore) {
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public static class BatchItem {
+        private final Integer questionId;
+        private final String questionText;
+        private final String studentAnswer;
+        private final String sampleAnswer;
+        private final double maxScore;
+        private final String questionType;
+        private final List<String> options;
+
+        public BatchItem(Integer questionId, String questionText, String studentAnswer, String sampleAnswer,
+                double maxScore, String questionType, List<String> options) {
+            this.questionId = questionId;
+            this.questionText = questionText;
+            this.studentAnswer = studentAnswer;
+            this.sampleAnswer = sampleAnswer;
+            this.maxScore = maxScore;
+            this.questionType = questionType;
+            this.options = options;
+        }
+
+        public Integer getQuestionId() {
+            return questionId;
+        }
+
+        public String getQuestionText() {
+            return questionText;
+        }
+
+        public String getStudentAnswer() {
+            return studentAnswer;
+        }
+
+        public String getSampleAnswer() {
+            return sampleAnswer;
+        }
+
+        public double getMaxScore() {
+            return maxScore;
+        }
+
+        public String getQuestionType() {
+            return questionType;
+        }
+
+        public List<String> getOptions() {
+            return options;
+        }
+    }
+
+    public AiGradingResult gradeWithGitHubModels(String questionText, String studentAnswer, String sampleAnswer,
+            double maxScore) {
         if (!enabled) {
             return new AiGradingResult(null, false, "GitHub Models fallback bị tắt", null);
         }
@@ -85,8 +141,7 @@ public class GitHubModelsAiGradingService {
         body.put("response_format", Map.of("type", "json_object"));
         body.put("messages", List.of(
                 Map.of("role", "system", "content", "Bạn là giáo viên chấm bài tự luận. Chỉ trả JSON hợp lệ."),
-                Map.of("role", "user", "content", prompt)
-        ));
+                Map.of("role", "user", "content", prompt)));
         return body;
     }
 
@@ -104,6 +159,90 @@ public class GitHubModelsAiGradingService {
             }
         }
         return null;
+    }
+
+    public Map<Integer, AiGradingResult> gradeBatchWithGitHubModels(String examTitle, List<BatchItem> items) {
+        if (!enabled || items == null || items.isEmpty()) {
+            return new HashMap<>();
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            logger.error("[GITHUB MODELS BATCH] API key chưa được cấu hình");
+            return new HashMap<>();
+        }
+
+        Map<Integer, AiGradingResult> finalResults = new HashMap<>();
+
+        // Chia chunk dựa trên tổng độ dài tích lũy để đảm bảo không vượt quá token
+        // limit
+        List<List<BatchItem>> chunks = new ArrayList<>();
+        List<BatchItem> currentChunk = new ArrayList<>();
+        long currentChunkLength = 0;
+
+        for (BatchItem item : items) {
+            long itemLength = (item.getStudentAnswer() != null ? item.getStudentAnswer().length() : 0) +
+                    (item.getSampleAnswer() != null ? item.getSampleAnswer().length() : 0);
+
+            // Nếu thêm item này vào mà vượt quá 8000 ký tự thì đóng chunk cũ
+            if (!currentChunk.isEmpty() && (currentChunkLength + itemLength > 8000)) {
+                chunks.add(new ArrayList<>(currentChunk));
+                currentChunk.clear();
+                currentChunkLength = 0;
+            }
+
+            currentChunk.add(item);
+            currentChunkLength += itemLength;
+        }
+        if (!currentChunk.isEmpty()) {
+            chunks.add(currentChunk);
+        }
+
+        logger.info("[GITHUB MODELS BATCH] Tổng số câu: {}. Đã chia thành {} chunks dựa trên độ dài.", items.size(),
+                chunks.size());
+
+        int chunkCount = 0;
+        for (List<BatchItem> chunk : chunks) {
+            chunkCount++;
+            // Truncate nội dung cực dài (phòng hờ trường hợp 1 câu đơn lẻ đã quá giới hạn)
+            List<BatchItem> truncatedChunk = chunk.stream().map(it -> new BatchItem(
+                    it.getQuestionId(),
+                    it.getQuestionText(),
+                    truncate(it.getStudentAnswer(), 5000),
+                    truncate(it.getSampleAnswer(), 5000),
+                    it.getMaxScore(),
+                    it.getQuestionType(),
+                    it.getOptions())).collect(Collectors.toList());
+
+            try {
+                String prompt = buildBatchGradingPrompt(examTitle, truncatedChunk);
+                Map<String, Object> requestBody = buildRequestBody(prompt);
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setBearerAuth(apiKey.trim());
+                HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+                logger.info("[GITHUB MODELS BATCH] Sending chunk {}/{} ({} items)", chunkCount, chunks.size(),
+                        truncatedChunk.size());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = restTemplate.postForObject(endpoint, request, Map.class);
+                if (response != null) {
+                    String responseText = extractAssistantText(response);
+                    Map<Integer, AiGradingResult> chunkResults = parseBatchGitHubModelsResponse(responseText,
+                            truncatedChunk);
+                    finalResults.putAll(chunkResults);
+                }
+            } catch (Exception e) {
+                logger.error("[GITHUB MODELS BATCH] Error in chunk {}: {}", chunkCount, e.getMessage());
+            }
+        }
+
+        return finalResults;
+    }
+
+    private String truncate(String text, int max) {
+        if (text == null || text.length() <= max)
+            return text;
+        return text.substring(0, max) + "... (nội dung bị cắt bớt do quá dài)";
     }
 
     private AiGradingResult parseResponse(String responseText, double maxScore) {
@@ -124,7 +263,8 @@ public class GitHubModelsAiGradingService {
                 score = maxScore;
             }
 
-            return new AiGradingResult(score, isCorrect != null ? isCorrect : score >= maxScore * 0.8, "Chấm bằng GitHub Models", feedback);
+            return new AiGradingResult(score, isCorrect != null ? isCorrect : score >= maxScore * 0.8,
+                    "Nhận xét của giáo viên", feedback);
         } catch (Exception e) {
             logger.warn("[GITHUB MODELS] Parse error: {}", e.getMessage());
             return new AiGradingResult(null, false, "Lỗi parse GitHub Models", null);
@@ -132,100 +272,263 @@ public class GitHubModelsAiGradingService {
     }
 
     private String buildPrompt(String questionText,
-                               String studentAnswer,
-                               String sampleAnswer,
-                               double maxScore) {
+            String studentAnswer,
+            String sampleAnswer,
+            double maxScore) {
 
         return String.format("""
-        Bạn là giáo viên chấm bài tự luận nghiêm túc và công bằng.
+                Bạn là hệ thống AI chấm bài học thuật chuyên nghiệp.
 
-        NHIỆM VỤ:
-        - Chấm bài dựa trên đáp án mẫu.
-        - Cho điểm theo mức độ đúng và đầy đủ của bài làm.
-        - Chỉ chấm những ý học sinh thực sự viết.
-        - Không cộng điểm cho nội dung không tồn tại trong bài.
-        - Làm ít chấm ít, làm nhiều chấm nhiều.
-        - Nếu chỉ làm một phần thì chỉ cho điểm phần đó.
-        - Nếu chỉ có mở bài thì chỉ cho điểm mở bài.
-        - Nếu có mở bài + vài ý thân bài thì cộng điểm tương ứng.
-        - Không yêu cầu học sinh phải giống 100%% đáp án mẫu.
-        - Chấp nhận cách diễn đạt khác nhưng cùng ý nghĩa.
-        - Ưu tiên phát hiện ý đúng, từ khóa đúng, luận điểm đúng.
-        - Không chấm quá dễ.
-        - Không chấm quá khắt khe.
-        - Không cho điểm tối đa nếu bài thiếu ý quan trọng.
-        - Nếu học sinh viết lan man, sai trọng tâm hoặc bịa nội dung thì trừ điểm phù hợp.
-        - Nếu bài chỉ sao chép một phần nhỏ đáp án thì chỉ cho điểm tương ứng phần đó.
+                MỤC TIÊU:
+                - Chấm điểm chính xác, công bằng, nghiêm túc.
+                - Đánh giá dựa trên mức độ đúng kiến thức.
+                - KHÔNG chấm theo cảm tính.
+                - KHÔNG ưu tiên văn phong nếu nội dung sai.
+                - KHÔNG suy diễn thêm ý ngoài đáp án.
 
-        QUY TẮC CHẤM:
-        1. Xác định các ý chính trong đáp án mẫu.
-        2. Chia điểm theo từng ý.
-        3. So sánh bài học sinh với từng ý.
-        4. Ý nào đúng thì cộng điểm ý đó.
-        5. Ý nào thiếu thì không cộng điểm.
-        6. Ý sai hoặc trái nghĩa thì trừ nhẹ điểm nếu nghiêm trọng.
-        7. Có thể cho điểm lẻ như 0.25, 0.5, 0.75...
-        8. Tổng điểm tối đa là %.2f.
+                =========================
+                QUY TẮC CHẤM QUAN TRỌNG
+                =========================
 
-        TRƯỜNG HỢP MÔN VĂN:
-        - Có thể chấm theo:
-          + mở bài
-          + thân bài
-          + kết bài
-          + phân tích nội dung
-          + nghệ thuật
-          + cảm nhận cá nhân hợp lý
-        - Học sinh làm tới đâu chấm tới đó.
-        - Không bắt buộc đúng từng chữ.
-        - Nếu phân tích đúng ý thơ, tác giả, hình tượng, biện pháp nghệ thuật thì cộng điểm tương ứng.
-        - Nếu chỉ viết mở bài hoặc giới thiệu tác giả thì chỉ cho phần điểm phù hợp.
+                1. Với môn TOÁN / LÝ / HÓA:
+                - Ưu tiên kết quả đúng.
+                - Kiểm tra công thức, phép tính, lập luận.
+                - Nếu đáp án cuối sai nhưng có hướng làm đúng:
+                  cho điểm một phần hợp lý.
+                - Không cho điểm nếu lập luận sai bản chất.
 
-        PHẢN HỒI:
-        - feedback phải chi tiết, mang tính xây dựng.
-        - Phải bao gồm các phần:
-          + Nhận xét tổng quát (Bài làm đạt yêu cầu hay chưa).
-          + Ưu điểm (Những ý đúng, kỹ năng viết, cách diễn đạt tốt).
-          + Nhược điểm/Thiếu sót (Những ý còn thiếu so với đáp án mẫu, lỗi lập luận, lỗi trình bày).
-          + Gợi ý cải thiện (Cách để đạt điểm tối đa).
-        - Sử dụng tiếng Việt tự nhiên, chuyên nghiệp.
-        - Không trả lời quá ngắn gọn kiểu "Tốt" hay "Thiếu ý".
+                2. Với môn SỬ / ĐỊA / GDCD:
+                - Ưu tiên tính chính xác của sự kiện, mốc thời gian,
+                  địa danh, khái niệm.
+                - Không chấp nhận thông tin bịa hoặc sai fact.
+                - Nếu học sinh diễn đạt khác đáp án mẫu nhưng đúng kiến thức:
+                  vẫn cho điểm.
 
-        BẮT BUỘC:
-        - Chỉ trả về JSON hợp lệ.
-        - Không thêm giải thích ngoài JSON.
-        - Format JSON:
+                3. Với môn VĂN / TIẾNG ANH:
+                - Đánh giá:
+                  + đúng nội dung
+                  + lập luận
+                  + diễn đạt
+                  + tính liên kết
+                - Không yêu cầu giống hoàn toàn đáp án mẫu.
 
-        {
-          "score": number,
-          "isCorrect": boolean,
-          "feedback": "string (bao gồm các phần nhận xét chi tiết, xuống dòng bằng \\n)"
-        }
+                4. Với câu hỏi ngắn:
+                - Chỉ cần đúng ý chính là đạt điểm cao.
 
-        CÂU HỎI:
-        %s
+                5. Với mọi môn:
+                - Nếu bài làm bỏ trống:
+                  score = 0
+                - Nếu bài làm hoàn toàn sai:
+                  score gần 0
+                - Nếu đúng một phần:
+                  cho điểm tương ứng mức độ đúng.
+                - Tuyệt đối không luôn cho điểm tối đa.
 
-        ĐÁP ÁN MẪU:
-        %s
+                =========================
+                THANG ĐIỂM
+                =========================
 
-        BÀI LÀM HỌC SINH:
-        %s
-        """,
+                - Điểm nằm trong khoảng 0 -> %.2f
+                - Có thể dùng số lẻ.
+                - Không làm tròn tùy tiện.
+
+                =========================
+                ĐỊNH DẠNG PHẢN HỒI
+                =========================
+
+                Chỉ trả JSON hợp lệ:
+
+                {
+                  "score": number,
+                  "isCorrect": boolean,
+                  "feedback": "string"
+                }
+
+                Trong đó:
+                - score: điểm số
+                - isCorrect:
+                    true nếu đạt >= 80%% số điểm
+                    false nếu dưới 80%%
+                - feedback:
+                    nhận xét ngắn gọn, rõ ràng,
+                    nêu đúng/sai ở đâu.
+
+                =========================
+                DỮ LIỆU CẦN CHẤM
+                =========================
+
+                MAX_SCORE: %.2f
+
+                QUESTION:
+                %s
+
+                SAMPLE_ANSWER:
+                %s
+
+                STUDENT_ANSWER:
+                %s
+                """,
+                maxScore,
                 maxScore,
                 questionText,
                 sampleAnswer,
-                studentAnswer
-        );
+                studentAnswer);
+    }
+
+    private String buildBatchGradingPrompt(String examTitle, List<BatchItem> items) {
+        StringBuilder questionsBlock = new StringBuilder();
+        for (BatchItem item : items) {
+            questionsBlock.append(String.format("""
+                    ---
+                    QUESTION_ID: %d
+                    TYPE: %s
+                    MAX_SCORE: %.2f
+                    QUESTION_TITLE: %s
+                    OPTIONS: %s
+                    SAMPLE_ANSWER (CORRECT): %s
+                    STUDENT_ANSWER: %s
+                    """,
+                    item.getQuestionId(),
+                    item.getQuestionType(),
+                    item.getMaxScore(),
+                    item.getQuestionText(),
+                    (item.getOptions() != null && !item.getOptions().isEmpty()) ? String.join(", ", item.getOptions())
+                            : "N/A",
+                    item.getSampleAnswer() != null ? item.getSampleAnswer() : "(N/A)",
+                    item.getStudentAnswer()));
+        }
+
+        return String.format(
+                """
+                        Bạn là hệ thống AI chấm bài học thuật chuyên nghiệp đang chấm bài cho đề thi: "%s".
+
+                        NHIỆM VỤ:
+                        Hãy chấm điểm danh sách các câu hỏi dưới đây. Mỗi câu hỏi có yêu cầu (QUESTION_TITLE) và đáp án mẫu (SAMPLE_ANSWER) riêng biệt.
+
+                        =========================
+                        QUY TẮC CHẤM CHUYÊN SÂU
+                        =========================
+
+                        1. Với môn TOÁN / TỰ NHIÊN:
+                           - Ưu tiên tính chính xác tuyệt đối của kết quả và logic giải bài.
+                           - Nếu sai bản chất hoặc sai công thức => 0 điểm hoặc điểm rất thấp dù viết dài.
+                           
+                        2. Với môn XÃ HỘI (Sử, Địa, GDCD):
+                           - Ưu tiên các "Key Fact": mốc thời gian, sự kiện, địa danh, con số.
+                           - Sai thông tin lịch sử/địa lý cơ bản => Trừ điểm nặng.
+                           
+                        3. Với môn VĂN HỌC / NGÔN NGỮ:
+                           - Đánh giá sự hiểu bài thông qua luận điểm và dẫn chứng.
+                           - Phải chỉ rõ học sinh làm đúng ý nào, thiếu ý nào hoặc lạc đề ở đâu.
+                           
+                        4. QUY TẮC CHUNG:
+                           - PHẢN HỒI (feedback) phải RIÊNG BIỆT cho từng câu, không trùng lặp.
+                           - Nếu bài làm trống hoặc quá ngắn (<10 ký tự cho tự luận) => 0 điểm.
+                           - Không tự suy diễn ý định của học sinh. Chỉ chấm dựa trên những gì đã viết.
+                           - Điểm số (score) phải phản ánh đúng năng lực, không cho điểm "khuyến khích" nếu nội dung sai.
+
+                        YÊU CẦU ĐỊNH DẠNG:
+                        - Trả về DUY NHẤT một mảng JSON (hoặc object có key "results").
+                        - Mỗi đối tượng:
+                        {
+                          "questionId": number,
+                          "score": number (0 -> MAX_SCORE),
+                          "isCorrect": boolean (true nếu score >= 80%% MAX_SCORE),
+                          "feedback": "string (chi tiết, nêu rõ ưu/nhược điểm)"
+                        }
+
+                        DANH SÁCH CÂU HỎI CẦN CHẤM:
+                        %s
+                        """,
+                examTitle, questionsBlock.toString());
+    }
+
+    private Map<Integer, AiGradingResult> parseBatchGitHubModelsResponse(String responseText, List<BatchItem> items) {
+        Map<Integer, AiGradingResult> results = new HashMap<>();
+        if (responseText == null || responseText.isEmpty())
+            return results;
+
+        try {
+            String cleaned = responseText.replaceAll("```json", "").replaceAll("```", "").trim();
+
+            List<Map<String, Object>> rawResults = null;
+
+            // ObjectMapper có thể parse ra Map hoặc List tùy vào JSON đầu vào
+            Object parsed = objectMapper.readValue(cleaned, Object.class);
+
+            if (parsed instanceof List) {
+                rawResults = (List<Map<String, Object>>) parsed;
+            } else if (parsed instanceof Map) {
+                Map<String, Object> map = (Map<String, Object>) parsed;
+                // Thử tìm trong các key phổ biến như "results", "answers", hoặc "items"
+                if (map.containsKey("results") && map.get("results") instanceof List) {
+                    rawResults = (List<Map<String, Object>>) map.get("results");
+                } else if (map.containsKey("items") && map.get("items") instanceof List) {
+                    rawResults = (List<Map<String, Object>>) map.get("items");
+                } else {
+                    // Nếu không có key bọc ngoài, có thể chính là một object đơn lẻ (nếu chỉ chấm 1
+                    // câu)
+                    // Hoặc ta coi toàn bộ map là một phần tử nếu nó có questionId
+                    if (map.containsKey("questionId")) {
+                        rawResults = List.of(map);
+                    }
+                }
+            }
+
+            if (rawResults == null) {
+                logger.error("[GITHUB MODELS BATCH] Không tìm thấy mảng kết quả trong JSON: {}", cleaned);
+                return results;
+            }
+
+            Map<Integer, BatchItem> itemMap = items.stream()
+                    .collect(Collectors.toMap(BatchItem::getQuestionId, it -> it));
+
+            for (Map<String, Object> raw : rawResults) {
+                try {
+                    Object qIdObj = raw.get("questionId");
+                    if (qIdObj == null)
+                        continue;
+
+                    Integer qId = Integer.valueOf(qIdObj.toString());
+                    Double score = Double.valueOf(raw.getOrDefault("score", 0.0).toString());
+
+                    Object isCorrectObj = raw.get("isCorrect");
+                    Boolean isCorrect = isCorrectObj instanceof Boolean ? (Boolean) isCorrectObj : null;
+
+                    String feedback = (String) raw.getOrDefault("feedback", "");
+
+                    BatchItem item = itemMap.get(qId);
+                    double maxScore = item != null ? item.getMaxScore() : 1.0;
+                    if (score > maxScore)
+                        score = maxScore;
+
+                    // Nếu isCorrect null, tính toán dựa trên score
+                    if (isCorrect == null) {
+                        isCorrect = score >= maxScore * 0.8;
+                    }
+
+                    results.put(qId, new AiGradingResult(score, isCorrect, "Nhận xét của giáo viên", feedback));
+                } catch (Exception e) {
+                    logger.warn("[GITHUB MODELS BATCH] Lỗi parse từng item: {}", e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            logger.error("[GITHUB MODELS BATCH] Parse error: {}", e.getMessage());
+        }
+        return results;
     }
 
     private String shortMessage(String rawBody) {
-        if (rawBody == null || rawBody.isBlank()) return "Không có nội dung lỗi";
+        if (rawBody == null || rawBody.isBlank())
+            return "Không có nội dung lỗi";
         String compact = rawBody.replace("\n", " ").replace("\r", " ").trim();
         return compact.length() > 180 ? compact.substring(0, 180) + "..." : compact;
     }
 
     private Double extractDouble(String json, String key) {
         String value = extractValue(json, key);
-        if (value == null) return null;
+        if (value == null)
+            return null;
         return Double.parseDouble(value.trim().replace(',', '.'));
     }
 
@@ -240,12 +543,16 @@ public class GitHubModelsAiGradingService {
 
     private String extractValue(String json, String key) {
         int idx = json.indexOf("\"" + key + "\"");
-        if (idx == -1) return null;
+        if (idx == -1)
+            return null;
         int colon = json.indexOf(':', idx);
-        if (colon == -1) return null;
+        if (colon == -1)
+            return null;
         int start = colon + 1;
-        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
-        if (start >= json.length()) return null;
+        while (start < json.length() && Character.isWhitespace(json.charAt(start)))
+            start++;
+        if (start >= json.length())
+            return null;
 
         char first = json.charAt(start);
         if (first == '"') {
@@ -253,7 +560,8 @@ public class GitHubModelsAiGradingService {
             return end == -1 ? null : json.substring(start + 1, end);
         }
         int end = start;
-        while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') end++;
+        while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}')
+            end++;
         return json.substring(start, end).trim();
     }
 
@@ -270,15 +578,26 @@ public class GitHubModelsAiGradingService {
             this.feedback = feedback;
         }
 
-        public Double getScore() { return score; }
-        public Boolean getIsCorrect() { return isCorrect; }
-        public String getGradingMethod() { return gradingMethod; }
-        public String getFeedback() { return feedback; }
+        public Double getScore() {
+            return score;
+        }
+
+        public Boolean getIsCorrect() {
+            return isCorrect;
+        }
+
+        public String getGradingMethod() {
+            return gradingMethod;
+        }
+
+        public String getFeedback() {
+            return feedback;
+        }
 
         @Override
         public String toString() {
-            return "{score=" + score + ", isCorrect=" + isCorrect + ", method='" + gradingMethod + "', feedback='" + feedback + "'}";
+            return "{score=" + score + ", isCorrect=" + isCorrect + ", method='" + gradingMethod + "', feedback='"
+                    + feedback + "'}";
         }
     }
 }
-
