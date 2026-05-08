@@ -23,6 +23,7 @@ public interface UserService {
 							 String avatar,
 							 LocalDateTime createdAt,
 							 LocalDateTime updatedAt,
+							 java.math.BigDecimal balance,
 							 UserStreakResponse streak) {}
 
 	ApiResponse<UserProfileResponse> getMyProfile();

@@ -29,6 +29,8 @@ public class Transaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
@@ -38,6 +40,12 @@ public class Transaction {
     private TransactionType type;
     @Enumerated(EnumType.STRING)
     private TransactionStatus status;
+    @Column(name = "order_code", unique = true)
+    private Long orderCode;
+
+    @Column(name = "payment_link_id")
+    private String paymentLinkId;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 }

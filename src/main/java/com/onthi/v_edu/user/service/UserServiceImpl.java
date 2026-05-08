@@ -10,6 +10,8 @@ import com.onthi.v_edu.user.entity.UserStudyStreak;
 import com.onthi.v_edu.user.repository.UserInformationRepository;
 import com.onthi.v_edu.user.repository.UserRepository;
 import com.onthi.v_edu.user.repository.UserStudyStreakRepository;
+import com.onthi.v_edu.wallet.entity.Wallet;
+import com.onthi.v_edu.wallet.repository.WalletRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,15 +30,18 @@ public class UserServiceImpl implements UserService {
     private final UserInformationRepository userInformationRepository;
     private final UserStudyStreakRepository userStudyStreakRepository;
     private final LevelRepository levelRepository;
+    private final WalletRepository walletRepository;
 
     public UserServiceImpl(UserRepository userRepository,
                            UserInformationRepository userInformationRepository,
                            UserStudyStreakRepository userStudyStreakRepository,
-                           LevelRepository levelRepository) {
+                           LevelRepository levelRepository,
+                           WalletRepository walletRepository) {
         this.userRepository = userRepository;
         this.userInformationRepository = userInformationRepository;
         this.userStudyStreakRepository = userStudyStreakRepository;
         this.levelRepository = levelRepository;
+        this.walletRepository = walletRepository;
     }
 
     @Override
@@ -197,6 +202,7 @@ public class UserServiceImpl implements UserService {
                 userInformation != null ? userInformation.getAvatar() : null,
                 user.getCreatedAt(),
                 userInformation != null ? userInformation.getUpdatedAt() : null,
+                walletRepository.findByUserId(user.getId()).map(Wallet::getBalance).orElse(java.math.BigDecimal.ZERO),
                 streakResponse
         );
     }
