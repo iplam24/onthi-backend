@@ -31,7 +31,7 @@ public class WalletService {
     private final PayOSService payOSService;
 
     @Transactional
-    public String initiateDeposit(User user, BigDecimal amount) throws Exception {
+    public CreatePaymentLinkResponse initiateDeposit(User user, BigDecimal amount) throws Exception {
         // 1. Tạo Transaction mới ở trạng thái PENDING
         Transaction transaction = new Transaction();
         transaction.setUser(user);
@@ -42,23 +42,23 @@ public class WalletService {
         
         logger.info("[PAYMENT] Khởi tạo yêu cầu nạp tiền cho user: {}, số tiền: {}", user.getUsername(), amount);
         
-        // Tạo orderCode duy nhất (PayOS yêu cầu Long)
-        // Kết hợp timestamp và ID để đảm bảo tính duy nhất và nằm trong giới hạn Long
+        // Tạo orderCode duy nhất
         transaction = transactionRepository.save(transaction);
         long orderCode = Long.parseLong(String.valueOf(System.currentTimeMillis()).substring(2) + transaction.getId());
         transaction.setOrderCode(orderCode);
         transaction = transactionRepository.save(transaction);
-        logger.info("[PAYMENT] Đã tạo Transaction ID: {}, OrderCode: {}", transaction.getId(), orderCode);
 
-        // 2. Gọi PayOS để lấy link thanh toán
+        // 2. Gọi PayOS để lấy link thanh toán và thông tin QR
         CreatePaymentLinkResponse paymentInfo = payOSService.createPaymentLink(transaction);
         
-        // 3. Lưu paymentLinkId để đối soát sau này
+        logger.info("[PAYMENT] PayOS Response - Bin: {}, Acc: {}, Name: {}, Desc: {}", 
+            paymentInfo.getBin(), paymentInfo.getAccountNumber(), paymentInfo.getAccountName(), paymentInfo.getDescription());
+
+        // 3. Lưu paymentLinkId
         transaction.setPaymentLinkId(paymentInfo.getPaymentLinkId());
         transactionRepository.save(transaction);
 
-        logger.info("[PAYMENT] Đã lấy được link thanh toán từ PayOS cho OrderCode: {}", transaction.getOrderCode());
-        return paymentInfo.getCheckoutUrl();
+        return paymentInfo;
     }
 
     @Transactional

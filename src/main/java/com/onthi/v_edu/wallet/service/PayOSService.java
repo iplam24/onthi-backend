@@ -45,12 +45,16 @@ public class PayOSService {
                 .price(transaction.getAmount().longValue())
                 .build();
 
+        // Thời gian hết hạn: 10 phút (600 giây) từ bây giờ
+        long expiredAt = System.currentTimeMillis() / 1000 + 600;
+
         CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
                 .orderCode(transaction.getOrderCode())
                 .amount(transaction.getAmount().longValue())
                 .description(description)
                 .returnUrl(returnUrl)
                 .cancelUrl(cancelUrl)
+                .expiredAt(expiredAt)
                 .items(List.of(item))
                 .build();
 

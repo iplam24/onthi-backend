@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
 import vn.payos.model.v2.paymentRequests.PaymentLink;
 import vn.payos.model.webhooks.Webhook;
 import vn.payos.model.webhooks.WebhookData;
@@ -40,7 +41,7 @@ public class PaymentController {
 
     @PostMapping("/create")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<String>> createPayment(@RequestBody PaymentRequest request) {
+    public ResponseEntity<ApiResponse<CreatePaymentLinkResponse>> createPayment(@RequestBody PaymentRequest request) {
         try {
             User user = getCurrentUser();
             if (user == null) {
@@ -48,11 +49,11 @@ public class PaymentController {
                         .body(new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Unauthorized", null));
             }
             
-            String checkoutUrl = walletService.initiateDeposit(user, request.getAmount());
-            logger.info("[API PAYMENT] Trả về link thanh toán thành công cho user: {}", user.getUsername());
-            return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), "Payment link created", checkoutUrl));
+            CreatePaymentLinkResponse paymentData = walletService.initiateDeposit(user, request.getAmount());
+            logger.info("[API PAYMENT] Khởi tạo thanh toán thành công cho user: {}", user.getUsername());
+            return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), "Payment initialized", paymentData));
         } catch (Exception e) {
-            logger.error("Error creating payment link: ", e);
+            logger.error("Error initializing payment: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse<>(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error: " + e.getMessage(), null));
         }
