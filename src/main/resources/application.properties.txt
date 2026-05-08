@@ -1,0 +1,47 @@
+# Datasource configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/vedu_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=123456
+
+# JPA configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# JWT configuration
+app.jwt-secret=YourSuperSecretKeyThatIsAtLeast256BitsLongAndShouldBeStoredSecurelyInProduction
+app.jwt-expiration-milliseconds=86400000
+
+# Server port
+server.port=8080
+
+# Application metadata
+spring.application.name=V-Edu
+app.version=1.0.0
+app.description=V-Edu Spring Boot Backend
+app.environment=development
+
+# File upload
+app.file-upload-dir=uploads
+app.file-upload-base-url=/uploads
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=10MB
+
+# Google Generative AI (Gemini) for Essay Grading
+app.gemini.api-key=${GEMINI_API_KEY:}
+app.gemini.model=${GEMINI_MODEL:gemini-3-flash-preview}
+app.gemini.enabled=true
+
+# GitHub Models fallback for Essay Grading
+app.github-models.api-key=${GITHUB_MODELS_API_KEY:${GITHUB_TOKEN:}}
+app.github-models.endpoint=${GITHUB_MODELS_ENDPOINT:https://models.github.ai/inference/chat/completions}
+app.github-models.model=${GITHUB_MODELS_MODEL:gpt-4o-mini}
+app.github-models.enabled=${GITHUB_MODELS_ENABLED:true}
+
+
+# PayOS Configuration
+app.payos.client-id=${PAYOS_CLIENT_ID:}
+app.payos.api-key=${PAYOS_API_KEY:}
+app.payos.checksum-key=${PAYOS_CHECKSUM_KEY:}
+app.payos.return-url=${PAYOS_RETURN_URL:http://localhost:5173/payment/success}
+app.payos.cancel-url=${PAYOS_CANCEL_URL:http://localhost:5173/payment/cancel}
