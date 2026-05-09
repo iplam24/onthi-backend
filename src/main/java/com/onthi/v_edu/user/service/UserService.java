@@ -36,4 +36,6 @@ public interface UserService {
 
 	void recordStudyActivity(Integer userId, LocalDate activityDate);
 
+	java.util.Optional<com.onthi.v_edu.user.entity.User> findByUsername(String username);
+
 }

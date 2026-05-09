@@ -1,5 +1,7 @@
 package com.onthi.v_edu.attempt.service;
 
+import com.onthi.v_edu.common.ai.GitHubModelsClientService;
+
 import com.onthi.v_edu.attempt.entity.Answer;
 import com.onthi.v_edu.attempt.entity.Attempt;
 import com.onthi.v_edu.attempt.repository.AnswerRepository;
@@ -34,7 +36,6 @@ public class AttemptAsyncGradingService {
     private final ExamQuestionRepository examQuestionRepository;
     private final QuestionOptionRepository questionOptionRepository;
     private final EssayAnswerRepository essayAnswerRepository;
-    private final GeminiAiGradingService geminiAiGradingService;
     private final GitHubModelsAiGradingService gitHubModelsAiGradingService;
 
     public AttemptAsyncGradingService(AttemptRepository attemptRepository,
@@ -42,14 +43,12 @@ public class AttemptAsyncGradingService {
                                      ExamQuestionRepository examQuestionRepository,
                                      QuestionOptionRepository questionOptionRepository,
                                      EssayAnswerRepository essayAnswerRepository,
-                                     GeminiAiGradingService geminiAiGradingService,
                                      GitHubModelsAiGradingService gitHubModelsAiGradingService) {
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.examQuestionRepository = examQuestionRepository;
         this.questionOptionRepository = questionOptionRepository;
         this.essayAnswerRepository = essayAnswerRepository;
-        this.geminiAiGradingService = geminiAiGradingService;
         this.gitHubModelsAiGradingService = gitHubModelsAiGradingService;
     }
 
@@ -128,16 +127,29 @@ public class AttemptAsyncGradingService {
                     answer.setCorrectAnswerSnapshot(correctAnswerText);
                     studentAnswerText = answer.getEssayAnswer() != null ? answer.getEssayAnswer() : "(Trống)";
 
-                    // Kiểm tra độ dài: Nếu dưới 30 ký tự thì so sánh trực tiếp, không gửi AI
+                    // Kiểm tra độ dài: Nếu dưới 30 ký tự thì thử so khớp linh hoạt
                     if (studentAnswerText.trim().length() < 30) {
-                        boolean match = studentAnswerText.trim().equalsIgnoreCase(correctAnswerText.trim());
-                        answer.setScore(match ? maxScore : 0.0);
-                        answer.setIsCorrect(match);
-                        answer.setAiFeedback(match ? "Đáp án ngắn chính xác." : "Đáp án quá ngắn hoặc không khớp với đáp án mẫu.");
-                        answer.setAiGradingMethod("Nhận xét của giáo viên");
+                        if (isFlexMatch(studentAnswerText, correctAnswerText)) {
+                            answer.setScore(maxScore);
+                            answer.setIsCorrect(true);
+                            answer.setAiFeedback("Đáp án ngắn chính xác.");
+                            answer.setAiGradingMethod("Nhận xét của giáo viên");
+                            
+                            logger.info("[ASYNC GRADING] Câu hỏi Essay ngắn (ID: {}) khớp linh hoạt, không gửi AI.", qId);
+                            continue;
+                        }
                         
-                        logger.info("[ASYNC GRADING] Câu hỏi Essay ngắn (ID: {}, len: {}) chấm LOCAL, không gửi AI.", qId, studentAnswerText.trim().length());
-                        continue;
+                        // Nếu không khớp linh hoạt nhưng cực ngắn (< 10 ký tự) thì mới cho 0 luôn
+                        // Còn nếu từ 10-30 ký tự mà không khớp linh hoạt thì vẫn nên gửi AI cho chắc
+                        if (studentAnswerText.trim().length() < 10) {
+                            answer.setScore(0.0);
+                            answer.setIsCorrect(false);
+                            answer.setAiFeedback("Đáp án quá ngắn hoặc không khớp với đáp án mẫu.");
+                            answer.setAiGradingMethod("Nhận xét của giáo viên");
+                            
+                            logger.info("[ASYNC GRADING] Câu hỏi Essay cực ngắn (ID: {}) không khớp, cho 0 điểm.", qId);
+                            continue;
+                        }
                     }
                 }
 
@@ -213,5 +225,54 @@ public class AttemptAsyncGradingService {
             answer.setAiFeedback("AI không cung cấp phản hồi cho câu hỏi này.");
             answer.setAiGradingMethod("FAILED");
         }
+    }
+
+    private boolean isFlexMatch(String student, String sample) {
+        if (student == null || sample == null) return false;
+        
+        String s = normalize(student);
+        String r = normalize(sample);
+        
+        if (s.equalsIgnoreCase(r)) return true;
+        
+        // Loại bỏ các tiền tố phổ biến
+        String sClean = removeCommonPrefixes(s);
+        String rClean = removeCommonPrefixes(r);
+        
+        if (sClean.equalsIgnoreCase(rClean)) return true;
+        
+        // Kiểm tra xem cái này có chứa cái kia không (chỉ áp dụng cho câu cực ngắn)
+        if (sClean.length() > 2 && rClean.length() > 2) {
+            return sClean.contains(rClean) || rClean.contains(sClean);
+        }
+        
+        return false;
+    }
+
+    private String normalize(String text) {
+        if (text == null) return "";
+        // Lowercase, trim, remove final punctuation
+        String normalized = text.trim().toLowerCase();
+        if (normalized.endsWith(".") || normalized.endsWith("?") || normalized.endsWith("!")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
+        }
+        return normalized;
+    }
+
+    private String removeCommonPrefixes(String text) {
+        String[] prefixes = {
+            "đáp án là:", "đáp án:", "trả lời:", "kết quả:", "thể thơ:", "phương thức biểu đạt:", 
+            "câu 1:", "câu 2:", "câu 3:", "câu 4:", "câu 5:",
+            "dap an la:", "dap an:", "tra loi:", "ket qua:", "the tho:", "phuong thuc bieu dat:"
+        };
+        
+        String result = text;
+        for (String p : prefixes) {
+            if (result.startsWith(p)) {
+                result = result.substring(p.length()).trim();
+                break; // Chỉ xóa 1 tiền tố
+            }
+        }
+        return result;
     }
 }

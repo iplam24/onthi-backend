@@ -1,16 +1,11 @@
 package com.onthi.v_edu.attempt.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.onthi.v_edu.common.ai.GitHubModelsClientService;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,21 +21,11 @@ public class GitHubModelsAiGradingService {
 
     private static final Logger logger = LoggerFactory.getLogger(GitHubModelsAiGradingService.class);
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final GitHubModelsClientService aiClientService;
 
-    @Value("${app.github-models.api-key:}")
-    private String apiKey;
-
-    @Value("${app.github-models.endpoint:https://models.github.ai/inference/chat/completions}")
-    private String endpoint;
-
-    @Value("${app.github-models.model:gpt-4o}")
-    private String model;
-
-    @Value("${app.github-models.enabled:true}")
-    private boolean enabled;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    public GitHubModelsAiGradingService(GitHubModelsClientService aiClientService) {
+        this.aiClientService = aiClientService;
+    }
 
     public static class BatchItem {
         private final Integer questionId;
@@ -93,80 +78,30 @@ public class GitHubModelsAiGradingService {
 
     public AiGradingResult gradeWithGitHubModels(String questionText, String studentAnswer, String sampleAnswer,
             double maxScore) {
-        if (!enabled) {
-            return new AiGradingResult(null, false, "GitHub Models fallback bị tắt", null);
-        }
-        if (apiKey == null || apiKey.isBlank()) {
-            return new AiGradingResult(null, false, "GitHub Models API key chưa được cấu hình", null);
+        if (!aiClientService.isEnabled()) {
+            return new AiGradingResult(null, false, "GitHub Models AI bị tắt", null);
         }
 
         try {
             String prompt = buildPrompt(questionText, studentAnswer, sampleAnswer, maxScore);
-            Map<String, Object> requestBody = buildRequestBody(prompt);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey.trim());
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
-
-            logger.info("[GITHUB MODELS] Sending grading request to {} model={}", endpoint, model);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restTemplate.postForObject(endpoint, request, Map.class);
-            if (response == null) {
+            logger.info("[GITHUB MODELS] Sending grading request using aiClientService");
+            
+            String responseText = aiClientService.generateContent(prompt, "Bạn là giáo viên chấm bài tự luận. Chỉ trả JSON hợp lệ.");
+            
+            if (responseText == null) {
                 return new AiGradingResult(null, false, "GitHub Models trả về kết quả rỗng", null);
             }
 
-            String responseText = extractAssistantText(response);
-            logger.info("[GITHUB MODELS] Response text: {}", responseText);
+            logger.info("[GITHUB MODELS] Response text received.");
             return parseResponse(responseText, maxScore);
-        } catch (HttpClientErrorException.TooManyRequests e) {
-            String shortMessage = shortMessage(e.getResponseBodyAsString());
-            logger.warn("[GITHUB MODELS] 429 Too Many Requests: {}", shortMessage);
-            return new AiGradingResult(null, false, "GitHub Models quá tải/giới hạn gọi", null);
-        } catch (HttpClientErrorException e) {
-            String shortMessage = shortMessage(e.getResponseBodyAsString());
-            logger.warn("[GITHUB MODELS] HTTP error {}: {}", e.getStatusCode(), shortMessage);
-            return new AiGradingResult(null, false, "Lỗi gọi GitHub Models: " + shortMessage, null);
         } catch (Exception e) {
             logger.error("[GITHUB MODELS] Unexpected error: {}", e.getMessage());
             return new AiGradingResult(null, false, "Lỗi gọi GitHub Models", null);
         }
     }
 
-    private Map<String, Object> buildRequestBody(String prompt) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("model", model);
-        body.put("temperature", 0.2);
-        body.put("max_tokens", 512);
-        body.put("response_format", Map.of("type", "json_object"));
-        body.put("messages", List.of(
-                Map.of("role", "system", "content", "Bạn là giáo viên chấm bài tự luận. Chỉ trả JSON hợp lệ."),
-                Map.of("role", "user", "content", prompt)));
-        return body;
-    }
-
-    @SuppressWarnings("unchecked")
-    private String extractAssistantText(Map<String, Object> response) {
-        Object choices = response.get("choices");
-        if (choices instanceof List<?> choiceList && !choiceList.isEmpty()) {
-            Object first = choiceList.get(0);
-            if (first instanceof Map<?, ?> firstMap) {
-                Object message = ((Map<String, Object>) firstMap).get("message");
-                if (message instanceof Map<?, ?> messageMap) {
-                    Object content = ((Map<String, Object>) messageMap).get("content");
-                    return content == null ? null : content.toString();
-                }
-            }
-        }
-        return null;
-    }
-
     public Map<Integer, AiGradingResult> gradeBatchWithGitHubModels(String examTitle, List<BatchItem> items) {
-        if (!enabled || items == null || items.isEmpty()) {
-            return new HashMap<>();
-        }
-        if (apiKey == null || apiKey.isBlank()) {
-            logger.error("[GITHUB MODELS BATCH] API key chưa được cấu hình");
+        if (!aiClientService.isEnabled() || items == null || items.isEmpty()) {
             return new HashMap<>();
         }
 
@@ -214,19 +149,13 @@ public class GitHubModelsAiGradingService {
 
             try {
                 String prompt = buildBatchGradingPrompt(examTitle, truncatedChunk);
-                Map<String, Object> requestBody = buildRequestBody(prompt);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.setBearerAuth(apiKey.trim());
-                HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
 
                 logger.info("[GITHUB MODELS BATCH] Sending chunk {}/{} ({} items)", chunkCount, chunks.size(),
                         truncatedChunk.size());
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = restTemplate.postForObject(endpoint, request, Map.class);
-                if (response != null) {
-                    String responseText = extractAssistantText(response);
+                
+                String responseText = aiClientService.generateContent(prompt, "Bạn là giáo viên chấm bài tự luận. Chỉ trả JSON hợp lệ.");
+                
+                if (responseText != null) {
                     Map<Integer, AiGradingResult> chunkResults = parseBatchGitHubModelsResponse(responseText,
                             truncatedChunk);
                     finalResults.putAll(chunkResults);
@@ -283,60 +212,26 @@ public class GitHubModelsAiGradingService {
                 - Chấm điểm chính xác, công bằng, nghiêm túc.
                 - Đánh giá dựa trên mức độ đúng kiến thức.
                 - KHÔNG chấm theo cảm tính.
-                - KHÔNG ưu tiên văn phong nếu nội dung sai.
-                - KHÔNG suy diễn thêm ý ngoài đáp án.
 
                 =========================
                 QUY TẮC CHẤM QUAN TRỌNG
                 =========================
+                
+                1. BỎ QUA TIỀN TỐ/NHÃN (LABEL):
+                   - Hãy bỏ qua các phần như "Thể thơ:", "Đáp án:", "Câu X:", "Trả lời:"... ở cả bài làm và đáp án mẫu. 
+                   - Ví dụ: Học sinh ghi "Tự do" và đáp án là "Thể thơ: Tự do" => Coi như KHỚP HOÀN TOÀN.
 
-                1. Với môn TOÁN / LÝ / HÓA:
-                - Ưu tiên kết quả đúng.
-                - Kiểm tra công thức, phép tính, lập luận.
-                - Nếu đáp án cuối sai nhưng có hướng làm đúng:
-                  cho điểm một phần hợp lý.
-                - Không cho điểm nếu lập luận sai bản chất.
+                2. Với môn VĂN / NGÔN NGỮ:
+                   - Đánh giá đúng nội dung, luận điểm và dẫn chứng.
+                   - Không yêu cầu giống hoàn toàn đáp án mẫu về mặt câu chữ, chỉ cần đúng ý.
 
-                2. Với môn SỬ / ĐỊA / GDCD:
-                - Ưu tiên tính chính xác của sự kiện, mốc thời gian,
-                  địa danh, khái niệm.
-                - Không chấp nhận thông tin bịa hoặc sai fact.
-                - Nếu học sinh diễn đạt khác đáp án mẫu nhưng đúng kiến thức:
-                  vẫn cho điểm.
-
-                3. Với môn VĂN / TIẾNG ANH:
-                - Đánh giá:
-                  + đúng nội dung
-                  + lập luận
-                  + diễn đạt
-                  + tính liên kết
-                - Không yêu cầu giống hoàn toàn đáp án mẫu.
-
-                4. Với câu hỏi ngắn:
-                - Chỉ cần đúng ý chính là đạt điểm cao.
-
-                5. Với mọi môn:
-                - Nếu bài làm bỏ trống:
-                  score = 0
-                - Nếu bài làm hoàn toàn sai:
-                  score gần 0
-                - Nếu đúng một phần:
-                  cho điểm tương ứng mức độ đúng.
-                - Tuyệt đối không luôn cho điểm tối đa.
+                3. PHẢN HỒI TRỰC QUAN:
+                   - Trong phần feedback, hãy thêm mục **So sánh:** để học sinh dễ đối chiếu.
+                   - Sử dụng format Markdown (bullet points, code blocks `...`) để làm nổi bật.
 
                 =========================
-                THANG ĐIỂM
+                ĐỊNH DẠNG PHẢN HỒI (JSON)
                 =========================
-
-                - Điểm nằm trong khoảng 0 -> %.2f
-                - Có thể dùng số lẻ.
-                - Không làm tròn tùy tiện.
-
-                =========================
-                ĐỊNH DẠNG PHẢN HỒI
-                =========================
-
-                Chỉ trả JSON hợp lệ:
 
                 {
                   "score": number,
@@ -344,31 +239,20 @@ public class GitHubModelsAiGradingService {
                   "feedback": "string"
                 }
 
-                Trong đó:
-                - score: điểm số
-                - isCorrect:
-                    true nếu đạt >= 80%% số điểm
-                    false nếu dưới 80%%
-                - feedback:
-                    nhận xét ngắn gọn, rõ ràng,
-                    nêu đúng/sai ở đâu.
+                Trong đó 'feedback' phải bao gồm:
+                1. Nhận xét chung.
+                2. **So sánh:** (Đối chiếu giữa bài làm và đáp án mẫu).
+                3. Gợi ý (nếu có).
 
                 =========================
                 DỮ LIỆU CẦN CHẤM
                 =========================
 
                 MAX_SCORE: %.2f
-
-                QUESTION:
-                %s
-
-                SAMPLE_ANSWER:
-                %s
-
-                STUDENT_ANSWER:
-                %s
+                QUESTION: %s
+                SAMPLE_ANSWER: %s
+                STUDENT_ANSWER: %s
                 """,
-                maxScore,
                 maxScore,
                 questionText,
                 sampleAnswer,
@@ -409,32 +293,30 @@ public class GitHubModelsAiGradingService {
                         QUY TẮC CHẤM CHUYÊN SÂU
                         =========================
 
-                        1. Với môn TOÁN / TỰ NHIÊN:
-                           - Ưu tiên tính chính xác tuyệt đối của kết quả và logic giải bài.
-                           - Nếu sai bản chất hoặc sai công thức => 0 điểm hoặc điểm rất thấp dù viết dài.
-                           
-                        2. Với môn XÃ HỘI (Sử, Địa, GDCD):
-                           - Ưu tiên các "Key Fact": mốc thời gian, sự kiện, địa danh, con số.
-                           - Sai thông tin lịch sử/địa lý cơ bản => Trừ điểm nặng.
-                           
-                        3. Với môn VĂN HỌC / NGÔN NGỮ:
+                        1. BỎ QUA TIỀN TỐ/NHÃN (LABEL):
+                           - Hãy bỏ qua các phần như "Thể thơ:", "Đáp án:", "Câu X:", "Trả lời:"... ở cả bài làm và đáp án mẫu khi so khớp ý tưởng.
+
+                        2. VỚI MÔN VĂN HỌC / XÃ HỘI:
                            - Đánh giá sự hiểu bài thông qua luận điểm và dẫn chứng.
-                           - Phải chỉ rõ học sinh làm đúng ý nào, thiếu ý nào hoặc lạc đề ở đâu.
-                           
-                        4. QUY TẮC CHUNG:
-                           - PHẢN HỒI (feedback) phải RIÊNG BIỆT cho từng câu, không trùng lặp.
-                           - Nếu bài làm trống hoặc quá ngắn (<10 ký tự cho tự luận) => 0 điểm.
-                           - Không tự suy diễn ý định của học sinh. Chỉ chấm dựa trên những gì đã viết.
-                           - Điểm số (score) phải phản ánh đúng năng lực, không cho điểm "khuyến khích" nếu nội dung sai.
+                           - Phải chỉ rõ học sinh làm đúng ý nào, thiếu ý nào.
+
+                        3. PHẢN HỒI TRỰC QUAN (feedback):
+                           - Phải RIÊNG BIỆT cho từng câu.
+                           - PHẢI có mục **So sánh:** để học sinh thấy sự tương quan giữa câu trả lời của mình và đáp án mẫu.
+                           - Ví dụ:
+                             **So sánh:**
+                             - Bạn: `Tự do`
+                             - Đáp án: `Tự do` (trong "Thể thơ: Tự do")
+                             => Hoàn toàn chính xác.
 
                         YÊU CẦU ĐỊNH DẠNG:
                         - Trả về DUY NHẤT một mảng JSON (hoặc object có key "results").
                         - Mỗi đối tượng:
                         {
                           "questionId": number,
-                          "score": number (0 -> MAX_SCORE),
-                          "isCorrect": boolean (true nếu score >= 80%% MAX_SCORE),
-                          "feedback": "string (chi tiết, nêu rõ ưu/nhược điểm)"
+                          "score": number,
+                          "isCorrect": boolean,
+                          "feedback": "string (bao gồm Nhận xét, **So sánh**, Uu/Nhược điểm)"
                         }
 
                         DANH SÁCH CÂU HỎI CẦN CHẤM:
@@ -454,7 +336,7 @@ public class GitHubModelsAiGradingService {
             List<Map<String, Object>> rawResults = null;
 
             // ObjectMapper có thể parse ra Map hoặc List tùy vào JSON đầu vào
-            Object parsed = objectMapper.readValue(cleaned, Object.class);
+            Object parsed = aiClientService.getObjectMapper().readValue(cleaned, Object.class);
 
             if (parsed instanceof List) {
                 rawResults = (List<Map<String, Object>>) parsed;

@@ -16,7 +16,11 @@ public class DatabaseFixer {
         try {
             System.out.println("[DB FIXER] Đang kiểm tra và sửa cột status trong bảng attempts...");
             jdbcTemplate.execute("ALTER TABLE attempts MODIFY COLUMN status VARCHAR(50)");
-            System.out.println("[DB FIXER] Đã sửa cột status thành công!");
+            
+            System.out.println("[DB FIXER] Đang cập nhật ENUM cho cột type trong bảng transactions...");
+            jdbcTemplate.execute("ALTER TABLE transactions MODIFY COLUMN type ENUM('DEPOSIT','PURCHASE','REFUND','WITHDRAWAL')");
+            
+            System.out.println("[DB FIXER] Đã sửa database thành công!");
         } catch (Exception e) {
             System.err.println("[DB FIXER] Lỗi khi sửa database: " + e.getMessage());
         }

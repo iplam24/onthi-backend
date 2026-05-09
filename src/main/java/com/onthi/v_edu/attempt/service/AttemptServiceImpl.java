@@ -1,5 +1,7 @@
 package com.onthi.v_edu.attempt.service;
 
+import com.onthi.v_edu.common.ai.GitHubModelsClientService;
+
 import com.onthi.v_edu.attempt.dto.AttemptAnswerResponse;
 import com.onthi.v_edu.attempt.dto.AttemptDetailResponse;
 import com.onthi.v_edu.attempt.dto.AttemptFilterRequest;
@@ -64,7 +66,6 @@ public class AttemptServiceImpl implements AttemptService {
     private final UserRepository userRepository;
     private final UserService userService;
     private final EssayGradingService essayGradingService;
-    private final GeminiAiGradingService geminiAiGradingService;
     private final GitHubModelsAiGradingService gitHubModelsAiGradingService;
     private final AttemptAsyncGradingService attemptAsyncGradingService;
 
@@ -77,7 +78,6 @@ public class AttemptServiceImpl implements AttemptService {
                               UserRepository userRepository,
                               UserService userService,
                               EssayGradingService essayGradingService,
-                              GeminiAiGradingService geminiAiGradingService,
                               GitHubModelsAiGradingService gitHubModelsAiGradingService,
                               AttemptAsyncGradingService attemptAsyncGradingService) {
         this.attemptRepository = attemptRepository;
@@ -89,7 +89,6 @@ public class AttemptServiceImpl implements AttemptService {
         this.userRepository = userRepository;
         this.userService = userService;
         this.essayGradingService = essayGradingService;
-        this.geminiAiGradingService = geminiAiGradingService;
         this.gitHubModelsAiGradingService = gitHubModelsAiGradingService;
         this.attemptAsyncGradingService = attemptAsyncGradingService;
     }

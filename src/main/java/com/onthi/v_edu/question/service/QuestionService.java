@@ -5,9 +5,9 @@ import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.question.dto.QuestionRequest;
 import com.onthi.v_edu.question.dto.QuestionResponse;
 import org.springframework.data.domain.Pageable;
+import java.util.List;
 
 public interface QuestionService {
-
 
 	ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Integer subjectId, Integer topicId, Pageable pageable);
 
@@ -18,4 +18,6 @@ public interface QuestionService {
 	ApiResponse<QuestionResponse> updateQuestion(Integer id, QuestionRequest request);
 
 	ApiResponse<Void> deleteQuestion(Integer id);
+
+	ApiResponse<Void> createQuestions(List<QuestionRequest> requests);
 }

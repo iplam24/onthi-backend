@@ -211,6 +211,12 @@ public class UserServiceImpl implements UserService {
         int currentStreak = streak == null || streak.getCurrentStreak() == null ? 0 : streak.getCurrentStreak();
         int longestStreak = streak == null || streak.getLongestStreak() == null ? 0 : streak.getLongestStreak();
         LocalDate lastActiveDate = streak == null ? null : streak.getLastActiveDate();
+        
+        // Logic: Nếu ngày hoạt động cuối cùng TRƯỚC ngày hôm qua, thì chuỗi bị coi là về 0
+        if (lastActiveDate != null && lastActiveDate.isBefore(LocalDate.now().minusDays(1))) {
+            currentStreak = 0;
+        }
+
         boolean activeToday = lastActiveDate != null && lastActiveDate.equals(LocalDate.now());
         int fireLevel = calculateFireLevel(currentStreak);
         return new UserStreakResponse(currentStreak, longestStreak, lastActiveDate, activeToday, fireLevel);
@@ -253,6 +259,11 @@ public class UserServiceImpl implements UserService {
             return 4;
         }
         return 5;
+    }
+
+    @Override
+    public java.util.Optional<User> findByUsername(String username) {
+        return userRepository.findByUsername(username);
     }
 
     private User getCurrentUser() {

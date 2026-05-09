@@ -60,7 +60,7 @@ CREATE TABLE transactions (
                               id INT AUTO_INCREMENT PRIMARY KEY,
                               user_id INT,
                               amount DECIMAL(15,2),
-                              type ENUM('DEPOSIT','PURCHASE','REFUND','WITHDRAW'),
+                              type ENUM('DEPOSIT','PURCHASE','REFUND','WITHDRAWAL'),
                               status ENUM('PENDING','SUCCESS','FAILED'),
                               created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                               FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

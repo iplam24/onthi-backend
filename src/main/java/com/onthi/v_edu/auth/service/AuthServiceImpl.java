@@ -10,6 +10,12 @@ import com.onthi.v_edu.user.entity.Role;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.RoleRepository;
 import com.onthi.v_edu.user.repository.UserRepository;
+import com.onthi.v_edu.wallet.entity.UserPlan;
+import com.onthi.v_edu.wallet.entity.Wallet;
+import com.onthi.v_edu.common.constant.UserPlanStatus;
+import com.onthi.v_edu.wallet.repository.PlanRepository;
+import com.onthi.v_edu.wallet.repository.UserPlanRepository;
+import com.onthi.v_edu.wallet.repository.WalletRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -40,6 +46,15 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private PlanRepository planRepository;
+
+    @Autowired
+    private UserPlanRepository userPlanRepository;
+
+    @Autowired
+    private WalletRepository walletRepository;
 
 
     @Override
@@ -88,7 +103,24 @@ public class AuthServiceImpl implements AuthService {
         user.setRole(userRole);
         user.setCreatedAt(LocalDateTime.now());
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        // 1. Khởi tạo ví cho người dùng mới
+        Wallet wallet = new Wallet();
+        wallet.setUser(savedUser);
+        wallet.setBalance(java.math.BigDecimal.ZERO);
+        walletRepository.save(wallet);
+
+        // 2. Gán gói "Free" mặc định cho người dùng mới
+        planRepository.findByName("Free").ifPresent(freePlan -> {
+            UserPlan userPlan = new UserPlan();
+            userPlan.setUser(savedUser);
+            userPlan.setPlan(freePlan);
+            userPlan.setStatus(UserPlanStatus.ACTIVE);
+            userPlan.setStartDate(LocalDateTime.now());
+            userPlan.setEndDate(LocalDateTime.now().plusYears(10)); // Gói Free có thời hạn dài
+            userPlanRepository.save(userPlan);
+        });
 
         return new ApiResponse<>(HttpStatus.OK.value(), "Đăng ký tài khoản mới thành công!");
     }

@@ -161,6 +161,22 @@ public class QuestionServiceImpl implements QuestionService {
 		return new ApiResponse<>(HttpStatus.OK.value(), "Xoá câu hỏi thành công!");
 	}
 
+	@Override
+	public ApiResponse<Void> createQuestions(List<QuestionRequest> requests) {
+		if (requests == null || requests.isEmpty()) {
+			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Danh sách câu hỏi trống!");
+		}
+
+		for (QuestionRequest request : requests) {
+			ApiResponse<QuestionResponse> response = createQuestion(request);
+			if (response.getStatus() != HttpStatus.CREATED.value()) {
+				throw new RuntimeException("Lỗi khi lưu câu hỏi: " + response.getMessage());
+			}
+		}
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lưu " + requests.size() + " câu hỏi thành công!");
+	}
+
 	private void syncQuestionDetails(Question question, QuestionRequest request) {
 		Integer questionId = question.getId();
 		questionOptionRepository.softDeleteByQuestionId(questionId);

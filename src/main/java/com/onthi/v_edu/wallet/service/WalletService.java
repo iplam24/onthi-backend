@@ -141,6 +141,32 @@ public class WalletService {
         }
     }
 
+    @Transactional
+    public void deductBalance(User user, BigDecimal amount, String reason) {
+        Wallet wallet = walletRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new RuntimeException("Wallet not found for user: " + user.getUsername()));
+
+        if (wallet.getBalance().compareTo(amount) < 0) {
+            throw new RuntimeException("Số dư không đủ để thực hiện giao dịch.");
+        }
+
+        wallet.setBalance(wallet.getBalance().subtract(amount));
+        walletRepository.save(wallet);
+
+        // Tạo Transaction bản ghi cho việc trừ tiền
+        Transaction transaction = new Transaction();
+        transaction.setUser(user);
+        transaction.setAmount(amount.negate()); // Số tiền âm
+        transaction.setType(TransactionType.WITHDRAWAL);
+        transaction.setStatus(TransactionStatus.SUCCESS);
+        transaction.setCreatedAt(LocalDateTime.now());
+        transaction.setPaymentLinkId("INTERNAL_" + reason.toUpperCase());
+        transactionRepository.save(transaction);
+
+        logger.info("[WALLET DEDUCT] Đã trừ {} từ ví user: {}. Lý do: {}. Số dư mới: {}", 
+                amount, user.getUsername(), reason, wallet.getBalance());
+    }
+
     @Transactional(readOnly = true)
     public Page<Transaction> getTransactionsByUser(User user, Pageable pageable) {
         logger.info("[DB] Đang tìm giao dịch cho user ID: {}, page: {}", user.getId(), pageable.getPageNumber());

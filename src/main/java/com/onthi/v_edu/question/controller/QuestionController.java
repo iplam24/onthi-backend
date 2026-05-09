@@ -54,6 +54,13 @@ public class QuestionController {
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 
+	@PostMapping("/batch")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<ApiResponse<?>> createBatchQuestions(@Valid @RequestBody java.util.List<QuestionRequest> requests) {
+		ApiResponse<?> response = questionService.createQuestions(requests);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
 	@PutMapping("/{id}")
 	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<ApiResponse<?>> updateQuestion(@PathVariable Integer id, @Valid @RequestBody QuestionRequest request) {
