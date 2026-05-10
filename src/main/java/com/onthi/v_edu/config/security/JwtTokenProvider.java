@@ -8,6 +8,7 @@ import java.security.Key;
 import java.util.Date;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import com.onthi.v_edu.config.security.services.UserDetailsImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
@@ -37,6 +38,10 @@ public class JwtTokenProvider {
         if (!roles.isEmpty()) {
             builder.claim("roles", roles);
             builder.claim("role", roles.get(0));
+        }
+
+        if (authentication.getPrincipal() instanceof UserDetailsImpl userDetails) {
+            builder.claim("userId", userDetails.getId());
         }
 
         return builder.signWith(key()).compact();
@@ -73,6 +78,15 @@ public class JwtTokenProvider {
                 .parseClaimsJws(token)
                 .getBody();
         return claims.get("role", String.class);
+    }
+
+    public Integer getUserId(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(key())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        return claims.get("userId", Integer.class);
     }
 
     // Validate JWT token

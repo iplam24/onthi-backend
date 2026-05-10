@@ -1,5 +1,6 @@
 package com.onthi.v_edu.chat.controller;
 
+import com.onthi.v_edu.chat.dto.ChatTyping;
 import com.onthi.v_edu.chat.entity.ChatMessage;
 import com.onthi.v_edu.chat.repository.ChatRepository;
 import com.onthi.v_edu.common.dto.ApiResponse;
@@ -12,7 +13,6 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,11 +33,19 @@ public class ChatController {
         ChatMessage saved = chatRepository.save(chatMessage);
         
         // Send to receiver via WebSocket
-        // Destination: /user/{receiverId}/queue/messages
         messagingTemplate.convertAndSendToUser(
                 String.valueOf(chatMessage.getReceiverId()), 
                 "/queue/messages", 
                 saved
+        );
+    }
+
+    @MessageMapping("/chat.typing")
+    public void sendTyping(@Payload ChatTyping typing) {
+        messagingTemplate.convertAndSendToUser(
+                String.valueOf(typing.getReceiverId()),
+                "/queue/typing",
+                typing
         );
     }
 

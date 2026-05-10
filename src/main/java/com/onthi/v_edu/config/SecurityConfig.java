@@ -58,6 +58,7 @@ public class SecurityConfig {
                         authorize.requestMatchers("/api/auth/**").permitAll()
                                 .requestMatchers("/api/payment/webhook").permitAll()
                                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                                .requestMatchers("/ws/**").permitAll()
                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                 .requestMatchers("/api/questions/**").authenticated()
                                 .requestMatchers("/api/exams/**").authenticated()
