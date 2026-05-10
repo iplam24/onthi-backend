@@ -46,6 +46,9 @@ public class Transaction {
     @Column(name = "payment_link_id")
     private String paymentLinkId;
 
+    @Column(length = 500)
+    private String description;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 }

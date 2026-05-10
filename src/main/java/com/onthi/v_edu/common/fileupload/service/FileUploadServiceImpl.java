@@ -132,4 +132,29 @@ public class FileUploadServiceImpl implements FileUpLoadService {
 		}
 		return baseUrl + "/" + storedFileName;
 	}
+
+	@Override
+	public void deleteFile(String fileUrl) {
+		if (fileUrl == null || fileUrl.isEmpty()) return;
+
+		try {
+			// Extract relative path from URL (e.g., /uploads/2026/05/10/xyz.jpg -> 2026/05/10/xyz.jpg)
+			String baseUrl = uploadBaseUrl == null ? "/uploads" : uploadBaseUrl.trim();
+			String relativePath = fileUrl;
+			if (fileUrl.startsWith(baseUrl)) {
+				relativePath = fileUrl.substring(baseUrl.length());
+			}
+			if (relativePath.startsWith("/")) {
+				relativePath = relativePath.substring(1);
+			}
+
+			Path filePath = uploadRootPath.resolve(relativePath).normalize();
+			if (filePath.startsWith(uploadRootPath)) {
+				Files.deleteIfExists(filePath);
+			}
+		} catch (IOException ex) {
+			// Log error but don't fail the whole transaction
+			System.err.println("Failed to delete file: " + fileUrl + ". Error: " + ex.getMessage());
+		}
+	}
 }

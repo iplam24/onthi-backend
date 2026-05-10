@@ -1,4 +1,6 @@
 package com.onthi.v_edu.attempt.service;
+import com.onthi.v_edu.social.entity.ActivityType;
+import com.onthi.v_edu.social.service.UserActivityService;
 
 import com.onthi.v_edu.common.ai.GitHubModelsClientService;
 
@@ -68,6 +70,7 @@ public class AttemptServiceImpl implements AttemptService {
     private final EssayGradingService essayGradingService;
     private final GitHubModelsAiGradingService gitHubModelsAiGradingService;
     private final AttemptAsyncGradingService attemptAsyncGradingService;
+    private final UserActivityService userActivityService;
 
     public AttemptServiceImpl(AttemptRepository attemptRepository,
                               AnswerRepository answerRepository,
@@ -79,7 +82,8 @@ public class AttemptServiceImpl implements AttemptService {
                               UserService userService,
                               EssayGradingService essayGradingService,
                               GitHubModelsAiGradingService gitHubModelsAiGradingService,
-                              AttemptAsyncGradingService attemptAsyncGradingService) {
+                              AttemptAsyncGradingService attemptAsyncGradingService,
+                              UserActivityService userActivityService) {
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.examRepository = examRepository;
@@ -91,6 +95,7 @@ public class AttemptServiceImpl implements AttemptService {
         this.essayGradingService = essayGradingService;
         this.gitHubModelsAiGradingService = gitHubModelsAiGradingService;
         this.attemptAsyncGradingService = attemptAsyncGradingService;
+        this.userActivityService = userActivityService;
     }
 
     @Override
@@ -257,6 +262,13 @@ public class AttemptServiceImpl implements AttemptService {
             attemptRepository.save(attempt);
             
             userService.recordStudyActivity(currentUser.getId(), now.toLocalDate());
+            
+            userActivityService.recordActivity(
+                currentUser.getId(), 
+                ActivityType.EXAM_COMPLETED, 
+                attempt.getExam().getId(), 
+                String.format("Vừa nộp bài thi: %s", attempt.getExam().getTitle())
+            );
 
             System.out.println("  [DEBUG] Đã nộp bài thành công. Lượt làm bài ID: " + attempt.getId() + " đang ở trạng thái GRADING.");
             System.out.println("  [DEBUG] Server sẽ tự động chấm bài trong vài giây tới qua Scheduler.");

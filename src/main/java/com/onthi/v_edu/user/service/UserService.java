@@ -27,6 +27,8 @@ public interface UserService {
 							 UserStreakResponse streak) {}
 
 	ApiResponse<UserProfileResponse> getMyProfile();
+	ApiResponse<UserProfileResponse> getUserProfile(Integer id);
+	ApiResponse<java.util.List<UserProfileResponse>> searchUsers(String query);
 
 	ApiResponse<UserProfileResponse> updateMyInformation(UserInformationRequest request);
 
@@ -37,5 +39,6 @@ public interface UserService {
 	void recordStudyActivity(Integer userId, LocalDate activityDate);
 
 	java.util.Optional<com.onthi.v_edu.user.entity.User> findByUsername(String username);
+	java.util.Optional<com.onthi.v_edu.user.entity.User> findById(Integer id);
 
 }

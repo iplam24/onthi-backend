@@ -36,4 +36,10 @@ public class User {
     private Role role;
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @jakarta.persistence.Transient
+    private String fullName;
+
+    @jakarta.persistence.Transient
+    private String avatar;
 }

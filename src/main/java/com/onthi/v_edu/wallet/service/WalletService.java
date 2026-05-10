@@ -38,6 +38,7 @@ public class WalletService {
         transaction.setAmount(amount);
         transaction.setType(TransactionType.DEPOSIT);
         transaction.setStatus(TransactionStatus.PENDING);
+        transaction.setDescription("Nạp tiền vào ví qua PayOS");
         transaction.setCreatedAt(LocalDateTime.now());
         
         logger.info("[PAYMENT] Khởi tạo yêu cầu nạp tiền cho user: {}, số tiền: {}", user.getUsername(), amount);
@@ -160,11 +161,67 @@ public class WalletService {
         transaction.setType(TransactionType.WITHDRAWAL);
         transaction.setStatus(TransactionStatus.SUCCESS);
         transaction.setCreatedAt(LocalDateTime.now());
-        transaction.setPaymentLinkId("INTERNAL_" + reason.toUpperCase());
+        transaction.setDescription(reason);
+        transaction.setPaymentLinkId("INTERNAL_" + reason.toUpperCase().replace(" ", "_"));
         transactionRepository.save(transaction);
 
         logger.info("[WALLET DEDUCT] Đã trừ {} từ ví user: {}. Lý do: {}. Số dư mới: {}", 
                 amount, user.getUsername(), reason, wallet.getBalance());
+    }
+
+    @Transactional
+    public void transfer(User sender, User receiver, BigDecimal amount, String message) {
+        if (sender.getId().equals(receiver.getId())) {
+            throw new RuntimeException("Bạn không thể tặng quà cho chính mình!");
+        }
+
+        Wallet senderWallet = walletRepository.findByUserId(sender.getId())
+                .orElseThrow(() -> new RuntimeException("Ví của người gửi không tồn tại"));
+
+        if (senderWallet.getBalance().compareTo(amount) < 0) {
+            throw new RuntimeException("Số dư ví không đủ để tặng quà!");
+        }
+
+        Wallet receiverWallet = walletRepository.findByUserId(receiver.getId())
+                .orElseGet(() -> {
+                    Wallet w = new Wallet();
+                    w.setUser(receiver);
+                    w.setBalance(BigDecimal.ZERO);
+                    return walletRepository.save(w);
+                });
+
+        // Trừ tiền người gửi
+        senderWallet.setBalance(senderWallet.getBalance().subtract(amount));
+        walletRepository.save(senderWallet);
+
+        // Cộng tiền người nhận
+        receiverWallet.setBalance(receiverWallet.getBalance().add(amount));
+        walletRepository.save(receiverWallet);
+
+        // Lưu transaction cho người gửi (tiền ra)
+        Transaction senderTx = new Transaction();
+        senderTx.setUser(sender);
+        senderTx.setAmount(amount.negate());
+        senderTx.setType(TransactionType.GIFT);
+        senderTx.setStatus(TransactionStatus.SUCCESS);
+        senderTx.setCreatedAt(LocalDateTime.now());
+        senderTx.setDescription("Tặng quà cho " + (receiver.getFullName() != null ? receiver.getFullName() : receiver.getUsername()) + ": " + message);
+        senderTx.setPaymentLinkId("GIFT_TO_" + receiver.getId());
+        transactionRepository.save(senderTx);
+
+        // Lưu transaction cho người nhận (tiền vào)
+        Transaction receiverTx = new Transaction();
+        receiverTx.setUser(receiver);
+        receiverTx.setAmount(amount);
+        receiverTx.setType(TransactionType.GIFT);
+        receiverTx.setStatus(TransactionStatus.SUCCESS);
+        receiverTx.setCreatedAt(LocalDateTime.now());
+        receiverTx.setDescription("Nhận quà từ " + (sender.getFullName() != null ? sender.getFullName() : sender.getUsername()) + ": " + message);
+        receiverTx.setPaymentLinkId("GIFT_FROM_" + sender.getId());
+        transactionRepository.save(receiverTx);
+        
+        logger.info("[GIFT] User {} tặng {} cho user {}. Message: {}", 
+                sender.getUsername(), amount, receiver.getUsername(), message);
     }
 
     @Transactional(readOnly = true)

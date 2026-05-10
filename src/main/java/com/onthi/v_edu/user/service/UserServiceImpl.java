@@ -59,6 +59,43 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<UserProfileResponse> getUserProfile(Integer id) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy người dùng!");
+        }
+
+        UserInformation userInformation = userInformationRepository.findByUser_Id(user.getId()).orElse(null);
+        UserStudyStreak streak = userStudyStreakRepository.findByUser_Id(user.getId()).orElse(null);
+
+        UserProfileResponse response = toUserProfileResponse(user, userInformation, streak);
+        
+        // Ẩn thông tin nhạy cảm cho hồ sơ công khai
+        User currentUser = getCurrentUser();
+        if (currentUser == null || !currentUser.getId().equals(id)) {
+            response = new UserProfileResponse(
+                response.id(),
+                response.username(),
+                null, // Hide email
+                response.roleName(),
+                response.fullName(),
+                response.schoolName(),
+                response.levelId(),
+                response.levelName(),
+                response.dob(),
+                response.avatar(),
+                response.createdAt(),
+                response.updatedAt(),
+                null, // Hide balance
+                response.streak()
+            );
+        }
+
+        return new ApiResponse<>(HttpStatus.OK.value(), "Lấy hồ sơ người dùng thành công!", response);
+    }
+
+    @Override
     public ApiResponse<UserProfileResponse> updateMyInformation(UserInformationRequest request) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
@@ -183,6 +220,21 @@ public class UserServiceImpl implements UserService {
         userStudyStreakRepository.save(streak);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<java.util.List<UserProfileResponse>> searchUsers(String query) {
+        java.util.List<User> users = userRepository.searchUsers(query);
+        java.util.List<UserProfileResponse> responses = users.stream()
+                .map(user -> {
+                    UserInformation info = userInformationRepository.findByUser_Id(user.getId()).orElse(null);
+                    UserStudyStreak streak = userStudyStreakRepository.findByUser_Id(user.getId()).orElse(null);
+                    return toUserProfileResponse(user, info, streak);
+                })
+                .collect(java.util.stream.Collectors.toList());
+        
+        return new ApiResponse<>(HttpStatus.OK.value(), "Tìm kiếm người dùng thành công!", responses);
+    }
+
     private UserProfileResponse toUserProfileResponse(User user, UserInformation userInformation, UserStudyStreak streak) {
         UserStreakResponse streakResponse = toStreakResponse(streak);
         String roleName = user.getRole() == null ? null : user.getRole().getName();
@@ -264,6 +316,11 @@ public class UserServiceImpl implements UserService {
     @Override
     public java.util.Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
+    }
+
+    @Override
+    public java.util.Optional<User> findById(Integer id) {
+        return userRepository.findById(id);
     }
 
     private User getCurrentUser() {

@@ -17,8 +17,14 @@ public class DatabaseFixer {
             System.out.println("[DB FIXER] Đang kiểm tra và sửa cột status trong bảng attempts...");
             jdbcTemplate.execute("ALTER TABLE attempts MODIFY COLUMN status VARCHAR(50)");
             
-            System.out.println("[DB FIXER] Đang cập nhật ENUM cho cột type trong bảng transactions...");
-            jdbcTemplate.execute("ALTER TABLE transactions MODIFY COLUMN type ENUM('DEPOSIT','PURCHASE','REFUND','WITHDRAWAL')");
+            System.out.println("[DB FIXER] Đang cập nhật cột type và description trong bảng transactions...");
+            jdbcTemplate.execute("ALTER TABLE transactions MODIFY COLUMN type VARCHAR(50)");
+            
+            try {
+                jdbcTemplate.execute("ALTER TABLE transactions ADD COLUMN description VARCHAR(500)");
+            } catch (Exception e) {
+                // Column might already exist
+            }
             
             System.out.println("[DB FIXER] Đã sửa database thành công!");
         } catch (Exception e) {

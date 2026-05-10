@@ -5,12 +5,7 @@ import com.onthi.v_edu.user.service.UserService;
 import com.onthi.v_edu.user.service.UserService.UserInformationRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/users")
@@ -46,5 +41,16 @@ public class UserController {
         ApiResponse<?> response = userService.checkInMyStreak();
         return ResponseEntity.status(response.getStatus()).body(response);
     }
-}
 
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<?>> getUserProfile(@PathVariable Integer id) {
+        ApiResponse<?> response = userService.getUserProfile(id);
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<?>> searchUsers(@RequestParam String query) {
+        ApiResponse<?> response = userService.searchUsers(query);
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+}
