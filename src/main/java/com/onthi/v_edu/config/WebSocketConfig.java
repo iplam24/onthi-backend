@@ -2,6 +2,7 @@ package com.onthi.v_edu.config;
 
 import com.onthi.v_edu.config.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -21,6 +22,7 @@ import java.util.Collections;
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
+@Slf4j
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtTokenProvider jwtTokenProvider;
@@ -52,11 +54,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         if (jwtTokenProvider.validateToken(token)) {
                             Integer userId = jwtTokenProvider.getUserId(token);
                             if (userId != null) {
+                                log.info("🔑 WebSocket CONNECT: Authenticated user ID: {}", userId);
                                 // Set the principal name to the numeric userId string
-                                // This matches the usage in ChatController: convertAndSendToUser(String.valueOf(receiverId), ...)
                                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                                         String.valueOf(userId), null, Collections.emptyList());
                                 accessor.setUser(auth);
+                            } else {
+                                log.warn("⚠️ WebSocket CONNECT: Invalid token or user ID not found in token");
                             }
                         }
                     }
