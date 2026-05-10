@@ -1,5 +1,6 @@
 package com.onthi.v_edu.ai.service;
 
+import com.onthi.v_edu.ai.dto.AiChatResponse;
 import com.onthi.v_edu.ai.entity.AiChatMessage;
 import com.onthi.v_edu.ai.entity.AiChatSession;
 import com.onthi.v_edu.ai.repository.AiChatMessageRepository;
@@ -10,9 +11,13 @@ import com.onthi.v_edu.wallet.service.PlanService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,10 +29,12 @@ public class AiChatService {
     private final AiChatMessageRepository aiChatMessageRepository;
     private final AiChatSessionRepository aiChatSessionRepository;
 
-    public String chat(User user, String userMessage, Long sessionId) {
+    public AiChatResponse chat(User user, String userMessage, Long sessionId) {
         // 1. Kiểm tra quyền truy cập tính năng Chatbot (Chỉ dành cho Pro và ProMax)
         if (!planService.canAccessFeature(user.getId(), "ai_chatbot")) {
-            return "Hic, tính năng này chỉ dành cho gói Pro và ProMax thui ạ. Bạn nâng cấp để cùng mình học bài nhé! ✨";
+            return AiChatResponse.builder()
+                    .content("Hic, tính năng này chỉ dành cho gói Pro và ProMax thui ạ. Bạn nâng cấp để cùng mình học bài nhé! ✨")
+                    .build();
         }
 
         logger.info("[AI CHAT] User {} is chatting with AI Study Buddy in session {}", user.getId(), sessionId);
@@ -43,6 +50,10 @@ public class AiChatService {
 
         String response = aiClientService.generateContent(userMessage, systemPrompt);
 
+        final AiChatResponse chatResponse = AiChatResponse.builder()
+                .content(response)
+                .build();
+
         // Lưu lịch sử nếu gói cước có quyền (ProMax)
         planService.getActiveUserPlan(user.getId()).ifPresent(up -> {
             if (up.getPlan().getHasAiHistory() != null && up.getPlan().getHasAiHistory()) {
@@ -51,19 +62,18 @@ public class AiChatService {
                     session = aiChatSessionRepository.findById(sessionId).orElse(null);
                 }
 
-                // Nếu không có session và là ProMax, tự động tạo session mới với tiêu đề từ tin
-                // nhắn đầu tiên
+                // Nếu không có session, tạo mới
                 if (session == null) {
-                    session = createSession(user,
-                            userMessage.length() > 30 ? userMessage.substring(0, 27) + "..." : userMessage);
+                    session = createSession(user, userMessage.length() > 30 ? userMessage.substring(0, 27) + "..." : userMessage);
                 }
 
                 saveMessage(user, userMessage, "user", session);
                 saveMessage(user, response, "assistant", session);
+                chatResponse.setSessionId(session.getId());
             }
         });
 
-        return response;
+        return chatResponse;
     }
 
     public AiChatSession createSession(User user, String title) {
@@ -84,8 +94,8 @@ public class AiChatService {
         aiChatMessageRepository.save(message);
     }
 
-    public List<AiChatSession> getUserSessions(User user) {
-        return aiChatSessionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+    public Page<AiChatSession> getUserSessions(User user, Pageable pageable) {
+        return aiChatSessionRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable);
     }
 
     public List<AiChatMessage> getSessionMessages(Long sessionId) {
@@ -94,5 +104,9 @@ public class AiChatService {
 
     public List<AiChatMessage> getUserHistory(User user) {
         return aiChatMessageRepository.findByUserIdOrderByCreatedAtAsc(user.getId());
+    }
+
+    public void deleteSession(Long sessionId) {
+        aiChatSessionRepository.deleteById(sessionId);
     }
 }
