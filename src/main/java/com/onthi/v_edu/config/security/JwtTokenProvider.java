@@ -11,8 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import com.onthi.v_edu.config.security.services.UserDetailsImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class JwtTokenProvider {
 
     @Value("${app.jwt-secret}")
@@ -81,12 +83,31 @@ public class JwtTokenProvider {
     }
 
     public Integer getUserId(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-        return claims.get("userId", Integer.class);
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(key())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            
+            Object userIdObj = claims.get("userId");
+            if (userIdObj == null) {
+                log.warn("❌ userId claim is missing in token");
+                return null;
+            }
+            
+            if (userIdObj instanceof Integer) {
+                return (Integer) userIdObj;
+            } else if (userIdObj instanceof Long) {
+                return ((Long) userIdObj).intValue();
+            } else {
+                log.warn("❌ userId claim has unexpected type: {}", userIdObj.getClass().getName());
+                return Integer.parseInt(userIdObj.toString());
+            }
+        } catch (Exception e) {
+            log.error("❌ Error extracting userId from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     // Validate JWT token
@@ -98,7 +119,7 @@ public class JwtTokenProvider {
                     .parse(token);
             return true;
         } catch (Exception ex) {
-            // Can be more specific with exceptions
+            log.error("❌ Token validation failed: {}", ex.getMessage());
             return false;
         }
     }
