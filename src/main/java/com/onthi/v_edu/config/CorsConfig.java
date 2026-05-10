@@ -14,7 +14,15 @@ public class CorsConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.addAllowedOriginPattern("*");
+
+        // Liệt kê chính xác các domain frontend của bạn
+        config.setAllowedOriginPatterns(java.util.List.of(
+                "https://vuxuanlam.me",
+                "https://admin.vuxuanlam.me",
+                "https://onthi.vuxuanlam.me",
+                "http://localhost:*"
+        ));
+
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         source.registerCorsConfiguration("/**", config);
