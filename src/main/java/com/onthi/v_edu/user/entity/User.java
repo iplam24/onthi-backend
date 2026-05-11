@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Setter;
 @Entity
@@ -27,8 +28,10 @@ public class User {
     private Integer id;
     @Column(length = 100)
     private String username;
+    @JsonIgnore
     @Column(unique = true, length = 100)
     private String email;
+    @JsonIgnore
     @Column(length = 255)
     private String password;
     @ManyToOne(fetch = FetchType.LAZY)

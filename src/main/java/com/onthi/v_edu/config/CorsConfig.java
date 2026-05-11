@@ -20,6 +20,7 @@ public class CorsConfig {
                 "https://vuxuanlam.me",
                 "https://admin.vuxuanlam.me",
                 "https://onthi.vuxuanlam.me",
+                "https://tinnhan.vuxuanlam.me",
                 "http://localhost:*"
         ));
 
