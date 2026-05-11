@@ -25,6 +25,8 @@ public class ChatController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatRepository chatRepository;
+    private final com.onthi.v_edu.user.repository.UserRepository userRepository;
+    private final com.onthi.v_edu.push.service.PushNotificationService pushNotificationService;
 
     @MessageMapping("/chat.sendMessage")
     public void sendMessage(@Payload ChatMessage chatMessage) {
@@ -44,6 +46,14 @@ public class ChatController {
                 destination, 
                 saved
         );
+
+        // Send Push Notification as fallback for background
+        try {
+            String name = chatMessage.getSenderName() != null ? chatMessage.getSenderName() : "Người dùng " + chatMessage.getSenderId();
+            pushNotificationService.sendNotification(chatMessage.getReceiverId(), "Tin nhắn mới từ " + name, chatMessage.getContent());
+        } catch (Exception e) {
+            log.error("Failed to trigger push notification: {}", e.getMessage());
+        }
     }
 
     @MessageMapping("/chat.typing")
