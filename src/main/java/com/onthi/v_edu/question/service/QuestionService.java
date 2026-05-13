@@ -20,4 +20,12 @@ public interface QuestionService {
 	ApiResponse<Void> deleteQuestion(Integer id);
 
 	ApiResponse<Void> createQuestions(List<QuestionRequest> requests);
+
+	ApiResponse<Void> importQuestionsFromExcel(org.springframework.web.multipart.MultipartFile file,
+			String imageFolderPath);
+
+	ApiResponse<List<QuestionRequest>> previewQuestionsFromExcel(org.springframework.web.multipart.MultipartFile file,
+			String imageFolderPath);
+
+	org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> generateExcelTemplate();
 }

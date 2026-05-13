@@ -157,4 +157,50 @@ public class FileUploadServiceImpl implements FileUpLoadService {
 			System.err.println("Failed to delete file: " + fileUrl + ". Error: " + ex.getMessage());
 		}
 	}
+
+	@Override
+	public ApiResponse<UploadedFileResponse> uploadLocalFile(String localFilePath) {
+		if (!StringUtils.hasText(localFilePath)) {
+			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Đường dẫn file không hợp lệ!");
+		}
+
+		try {
+			Path sourcePath = Paths.get(localFilePath);
+			if (!Files.exists(sourcePath) || !Files.isRegularFile(sourcePath)) {
+				return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy file tại đường dẫn: " + localFilePath);
+			}
+
+			String originalName = sourcePath.getFileName().toString();
+			
+			String dateFolder = buildDateFolder();
+			Path targetDir = uploadRootPath.resolve(dateFolder).normalize();
+			Files.createDirectories(targetDir);
+
+			String storedFileName = dateFolder + "/" + buildStoredFileName(originalName);
+			Path targetPath = uploadRootPath.resolve(storedFileName).normalize();
+			if (!targetPath.startsWith(uploadRootPath)) {
+				return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Tên file không hợp lệ!");
+			}
+
+			Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+			
+			String contentType = Files.probeContentType(sourcePath);
+			if (contentType == null) {
+				contentType = "application/octet-stream";
+			}
+
+			UploadedFileResponse data = new UploadedFileResponse(
+					originalName,
+					storedFileName,
+					contentType,
+					Files.size(sourcePath),
+					buildPublicUrl(storedFileName),
+					targetPath.toString(),
+					LocalDateTime.now()
+			);
+			return new ApiResponse<>(HttpStatus.CREATED.value(), "Copy file cục bộ thành công!", data);
+		} catch (IOException ex) {
+			return new ApiResponse<>(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Không thể copy file: " + ex.getMessage());
+		}
+	}
 }

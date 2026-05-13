@@ -12,4 +12,5 @@ public interface FileUpLoadService {
 
 	ApiResponse<List<UploadedFileResponse>> uploadFiles(List<MultipartFile> files);
 	void deleteFile(String fileUrl);
+	ApiResponse<UploadedFileResponse> uploadLocalFile(String localFilePath);
 }

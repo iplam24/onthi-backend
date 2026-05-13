@@ -16,9 +16,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Sort;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/questions")
@@ -35,8 +39,7 @@ public class QuestionController {
 	public ResponseEntity<ApiResponse<?>> getAllQuestions(
 			@RequestParam(required = false) Integer subjectId,
 			@RequestParam(required = false) Integer topicId,
-			@ParameterObject
-			@PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+			@ParameterObject @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
 		ApiResponse<?> response = questionService.getAllQuestions(subjectId, topicId, pageable);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
@@ -56,14 +59,15 @@ public class QuestionController {
 
 	@PostMapping("/batch")
 	@PreAuthorize("hasRole('ADMIN')")
-	public ResponseEntity<ApiResponse<?>> createBatchQuestions(@Valid @RequestBody java.util.List<QuestionRequest> requests) {
+	public ResponseEntity<ApiResponse<?>> createBatchQuestions(@RequestBody List<QuestionRequest> requests) {
 		ApiResponse<?> response = questionService.createQuestions(requests);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 
 	@PutMapping("/{id}")
 	@PreAuthorize("hasRole('ADMIN')")
-	public ResponseEntity<ApiResponse<?>> updateQuestion(@PathVariable Integer id, @Valid @RequestBody QuestionRequest request) {
+	public ResponseEntity<ApiResponse<?>> updateQuestion(@PathVariable Integer id,
+			@Valid @RequestBody QuestionRequest request) {
 		ApiResponse<?> response = questionService.updateQuestion(id, request);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
@@ -73,5 +77,29 @@ public class QuestionController {
 	public ResponseEntity<ApiResponse<?>> deleteQuestion(@PathVariable Integer id) {
 		ApiResponse<?> response = questionService.deleteQuestion(id);
 		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<ApiResponse<?>> importQuestionsFromExcel(
+			@RequestParam("file") MultipartFile file,
+			@RequestParam(value = "imageFolderPath", required = false) String imageFolderPath) {
+		ApiResponse<?> response = questionService.importQuestionsFromExcel(file, imageFolderPath);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<ApiResponse<?>> previewQuestionsFromExcel(
+			@RequestParam("file") MultipartFile file,
+			@RequestParam(value = "imageFolderPath", required = false) String imageFolderPath) {
+		ApiResponse<?> response = questionService.previewQuestionsFromExcel(file, imageFolderPath);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@GetMapping("/import/template")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<Resource> downloadExcelTemplate() {
+		return questionService.generateExcelTemplate();
 	}
 }

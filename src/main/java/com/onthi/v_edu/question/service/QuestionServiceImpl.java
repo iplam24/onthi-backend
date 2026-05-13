@@ -33,6 +33,22 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
+import com.onthi.v_edu.common.fileupload.service.FileUpLoadService;
+import com.onthi.v_edu.common.fileupload.dto.UploadedFileResponse;
+import com.onthi.v_edu.common.constant.DifficultyLevel;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Iterator;
+
 @Service
 @Transactional
 public class QuestionServiceImpl implements QuestionService {
@@ -43,19 +59,22 @@ public class QuestionServiceImpl implements QuestionService {
 	private final ExplanationRepository explanationRepository;
 	private final TopicRepository topicRepository;
 	private final UserRepository userRepository;
+	private final FileUpLoadService fileUpLoadService;
 
 	public QuestionServiceImpl(QuestionRepository questionRepository,
 						   QuestionOptionRepository questionOptionRepository,
 						   EssayAnswerRepository essayAnswerRepository,
 						   ExplanationRepository explanationRepository,
 						   TopicRepository topicRepository,
-						   UserRepository userRepository) {
+						   UserRepository userRepository,
+						   FileUpLoadService fileUpLoadService) {
 		this.questionRepository = questionRepository;
 		this.questionOptionRepository = questionOptionRepository;
 		this.essayAnswerRepository = essayAnswerRepository;
 		this.explanationRepository = explanationRepository;
 		this.topicRepository = topicRepository;
 		this.userRepository = userRepository;
+		this.fileUpLoadService = fileUpLoadService;
 	}
 
 	@Override
@@ -175,6 +194,315 @@ public class QuestionServiceImpl implements QuestionService {
 		}
 
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lưu " + requests.size() + " câu hỏi thành công!");
+	}
+
+	@Override
+	public ApiResponse<List<QuestionRequest>> previewQuestionsFromExcel(MultipartFile file, String imageFolderPath) {
+		if (file == null || file.isEmpty()) {
+			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "File Excel trống!", null);
+		}
+
+		String imageDir = imageFolderPath;
+		if (!org.springframework.util.StringUtils.hasText(imageDir)) {
+			imageDir = System.getProperty("user.home") + java.io.File.separator + "Downloads";
+		}
+
+		List<QuestionRequest> requests = new ArrayList<>();
+
+		try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
+			Sheet sheet = workbook.getSheetAt(0);
+			Iterator<Row> rows = sheet.iterator();
+
+			if (rows.hasNext()) {
+				rows.next(); // Skip header
+			}
+
+			while (rows.hasNext()) {
+				Row currentRow = rows.next();
+				if (isRowEmpty(currentRow)) break;
+
+				try {
+					QuestionRequest req = new QuestionRequest();
+
+					Cell topicIdCell = currentRow.getCell(1);
+					req.setTopicId((int) topicIdCell.getNumericCellValue());
+
+					Cell contentCell = currentRow.getCell(2);
+					req.setContent(getCellValueAsString(contentCell));
+
+					Cell formatCell = currentRow.getCell(3);
+					req.setContentFormat(parseContentFormat(getCellValueAsString(formatCell)));
+
+					Cell imageCell = currentRow.getCell(4);
+					String imageName = getCellValueAsString(imageCell);
+					if (org.springframework.util.StringUtils.hasText(imageName)) {
+						String fullImagePath = Paths.get(imageDir, imageName).toString();
+						ApiResponse<UploadedFileResponse> uploadRes = fileUpLoadService.uploadLocalFile(fullImagePath);
+						if (uploadRes.getStatus() == HttpStatus.CREATED.value() && uploadRes.getData() != null) {
+							req.setUrl(uploadRes.getData().getUrl());
+						}
+					}
+
+					Cell typeCell = currentRow.getCell(5);
+					req.setType(parseQuestionType(getCellValueAsString(typeCell)));
+
+					Cell diffCell = currentRow.getCell(6);
+					req.setDifficulty(parseDifficulty(getCellValueAsString(diffCell)));
+
+					Cell expCell = currentRow.getCell(7);
+					req.setExplanation(getCellValueAsString(expCell));
+
+					Cell essayCell = currentRow.getCell(8);
+					if (req.getType() == QuestionType.ESSAY) {
+						req.setSampleAnswer(getCellValueAsString(essayCell));
+					} else {
+						List<OptionRequest> options = new ArrayList<>();
+						for (int i = 0; i < 4; i++) {
+							int contentCol = 9 + (i * 2);
+							int isCorrectCol = 10 + (i * 2);
+							String optContent = getCellValueAsString(currentRow.getCell(contentCol));
+							String optCorrect = getCellValueAsString(currentRow.getCell(isCorrectCol));
+							
+							if (org.springframework.util.StringUtils.hasText(optContent)) {
+								OptionRequest opt = new OptionRequest();
+								opt.setContent(optContent);
+								opt.setIsCorrect(Boolean.parseBoolean(optCorrect));
+								options.add(opt);
+							}
+						}
+						req.setOptions(options);
+					}
+
+					requests.add(req);
+				} catch (Exception e) {
+					System.err.println("Lỗi parse dòng trong Excel: " + e.getMessage());
+				}
+			}
+		} catch (Exception e) {
+			return new ApiResponse<>(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Lỗi khi đọc file Excel: " + e.getMessage(), null);
+		}
+
+		if (requests.isEmpty()) {
+			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không tìm thấy dữ liệu hợp lệ trong file Excel!", null);
+		}
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Đọc file thành công", requests);
+	}
+
+	@Override
+	public ApiResponse<Void> importQuestionsFromExcel(MultipartFile file, String imageFolderPath) {
+		ApiResponse<List<QuestionRequest>> previewRes = previewQuestionsFromExcel(file, imageFolderPath);
+		if (previewRes.getStatus() != HttpStatus.OK.value()) {
+			return new ApiResponse<>(previewRes.getStatus(), previewRes.getMessage());
+		}
+		return createQuestions(previewRes.getData());
+	}
+
+	@Override
+	public ResponseEntity<Resource> generateExcelTemplate() {
+		try (Workbook workbook = new XSSFWorkbook()) {
+			Sheet sheet = workbook.createSheet("Import Template");
+			Row headerRow = sheet.createRow(0);
+
+			String[] headers = {
+					"STT", "Topic ID", "Nội dung câu hỏi", "Định dạng (PLAIN_TEXT/LATEX)", 
+					"Tên file ảnh (tuỳ chọn)", "Loại (MCQ/ESSAY)", "Độ khó (EASY/MEDIUM/HARD)", 
+					"Giải thích (tuỳ chọn)", "Đáp án tự luận (Nếu ESSAY)",
+					"Đáp án 1 (Nội dung)", "Đáp án 1 (Đúng/Sai: TRUE/FALSE)",
+					"Đáp án 2 (Nội dung)", "Đáp án 2 (Đúng/Sai: TRUE/FALSE)",
+					"Đáp án 3 (Nội dung)", "Đáp án 3 (Đúng/Sai: TRUE/FALSE)",
+					"Đáp án 4 (Nội dung)", "Đáp án 4 (Đúng/Sai: TRUE/FALSE)"
+			};
+
+			CellStyle headerStyle = workbook.createCellStyle();
+			Font font = workbook.createFont();
+			font.setBold(true);
+			headerStyle.setFont(font);
+			headerStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
+			headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+			headerStyle.setBorderBottom(BorderStyle.THIN);
+			headerStyle.setBorderTop(BorderStyle.THIN);
+			headerStyle.setBorderLeft(BorderStyle.THIN);
+			headerStyle.setBorderRight(BorderStyle.THIN);
+			headerStyle.setAlignment(HorizontalAlignment.CENTER);
+			headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+			headerStyle.setWrapText(true);
+
+			CellStyle dataStyle = workbook.createCellStyle();
+			dataStyle.setBorderBottom(BorderStyle.THIN);
+			dataStyle.setBorderTop(BorderStyle.THIN);
+			dataStyle.setBorderLeft(BorderStyle.THIN);
+			dataStyle.setBorderRight(BorderStyle.THIN);
+			dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+			dataStyle.setWrapText(true);
+
+			headerRow.setHeightInPoints(30);
+
+			for (int i = 0; i < headers.length; i++) {
+				Cell cell = headerRow.createCell(i);
+				cell.setCellValue(headers[i]);
+				cell.setCellStyle(headerStyle);
+				
+				if (i == 2 || i == 7 || i == 8) {
+					sheet.setColumnWidth(i, 12000);
+				} else if (i >= 9) {
+					sheet.setColumnWidth(i, 8000);
+				} else {
+					sheet.setColumnWidth(i, 6000);
+				}
+			}
+
+			// Ví dụ 1: MCQ bình thường
+			Row row1 = sheet.createRow(1);
+			row1.setHeightInPoints(45);
+			Object[] row1Data = {
+					1, 1, "Thủ đô của Việt Nam là gì?", "PLAIN_TEXT", "hanoi_map.jpg", "MCQ", "EASY", 
+					"Hà Nội là thủ đô của Việt Nam.", "", "Hà Nội", "TRUE", "Hồ Chí Minh", "FALSE", 
+					"Đà Nẵng", "FALSE", "Cần Thơ", "FALSE"
+			};
+			for (int i = 0; i < row1Data.length; i++) {
+				Cell cell = row1.createCell(i);
+				if (row1Data[i] instanceof Integer) cell.setCellValue((Integer) row1Data[i]);
+				else cell.setCellValue((String) row1Data[i]);
+				cell.setCellStyle(dataStyle);
+			}
+
+			// Ví dụ 2: ESSAY
+			Row row2 = sheet.createRow(2);
+			row2.setHeightInPoints(45);
+			Object[] row2Data = {
+					2, 1, "Hãy phân tích nhân vật Chí Phèo.", "PLAIN_TEXT", "", "ESSAY", "HARD", 
+					"", "Chí Phèo là một kiệt tác của Nam Cao..."
+			};
+			for (int i = 0; i < row2Data.length; i++) {
+				Cell cell = row2.createCell(i);
+				if (row2Data[i] instanceof Integer) cell.setCellValue((Integer) row2Data[i]);
+				else cell.setCellValue((String) row2Data[i]);
+				cell.setCellStyle(dataStyle);
+			}
+
+			// Ví dụ 3: Toán học (LATEX)
+			Row row3 = sheet.createRow(3);
+			row3.setHeightInPoints(45);
+			Object[] row3Data = {
+					3, 1, "Tính đạo hàm của hàm số \\( f(x) = x^2 + 3x + 1 \\).", "LATEX", "", "MCQ", "MEDIUM", 
+					"Dùng quy tắc cơ bản.", "", "\\( f'(x) = 2x + 3 \\)", "TRUE", "\\( f'(x) = 2x - 3 \\)", "FALSE", 
+					"\\( x^2 + 3 \\)", "FALSE", "\\( 2x + 1 \\)", "FALSE"
+			};
+			for (int i = 0; i < row3Data.length; i++) {
+				Cell cell = row3.createCell(i);
+				if (row3Data[i] instanceof Integer) cell.setCellValue((Integer) row3Data[i]);
+				else cell.setCellValue((String) row3Data[i]);
+				cell.setCellStyle(dataStyle);
+			}
+
+			// Sheet: Công thức Toán
+			Sheet mathSheet = workbook.createSheet("Công thức Toán (LaTeX)");
+			Row mathHeader = mathSheet.createRow(0);
+			mathHeader.setHeightInPoints(30);
+			String[] mHeaders = {"Tên công thức", "Mã LaTeX", "Ví dụ"};
+			for (int i = 0; i < mHeaders.length; i++) {
+				Cell cell = mathHeader.createCell(i);
+				cell.setCellValue(mHeaders[i]);
+				cell.setCellStyle(headerStyle);
+				mathSheet.setColumnWidth(i, 10000);
+			}
+			String[][] mathExamples = {
+				{"Phân số", "\\\\frac{a}{b}", "\\\\( \\\\frac{1}{2} \\\\)"},
+				{"Căn thức", "\\\\sqrt{x}", "\\\\( \\\\sqrt{2} \\\\)"},
+				{"Số mũ / Chỉ số", "x^n, x_i", "\\\\( x^2, a_1 \\\\)"},
+				{"Tổng / Tích phân", "\\\\sum, \\\\int", "\\\\( \\\\int_{0}^{1} x dx \\\\)"},
+				{"Hệ phương trình", "\\\\begin{cases} ... \\\\end{cases}", "\\\\( \\\\begin{cases} x=1 \\\\\\\\ y=2 \\\\end{cases} \\\\)"}
+			};
+			for (int i = 0; i < mathExamples.length; i++) {
+				Row r = mathSheet.createRow(i + 1);
+				for (int j = 0; j < mathExamples[i].length; j++) {
+					Cell c = r.createCell(j);
+					c.setCellValue(mathExamples[i][j]);
+					c.setCellStyle(dataStyle);
+				}
+			}
+
+			// Sheet: Danh sách Topic
+			Sheet topicSheet = workbook.createSheet("Danh sách Chủ đề (Topics)");
+			Row topicHeader = topicSheet.createRow(0);
+			topicHeader.setHeightInPoints(30);
+			String[] tHeaders = {"Topic ID", "Tên chủ đề", "Môn học", "Cấp học"};
+			for (int i = 0; i < tHeaders.length; i++) {
+				Cell cell = topicHeader.createCell(i);
+				cell.setCellValue(tHeaders[i]);
+				cell.setCellStyle(headerStyle);
+				topicSheet.setColumnWidth(i, 8000);
+			}
+
+			List<Topic> allTopics = topicRepository.findAll();
+			int rIdx = 1;
+			for (Topic t : allTopics) {
+				Row r = topicSheet.createRow(rIdx++);
+				r.createCell(0).setCellValue(t.getId());
+				r.createCell(1).setCellValue(t.getName() != null ? t.getName() : "");
+				r.createCell(2).setCellValue(t.getSubject() != null ? t.getSubject().getName() : "");
+				r.createCell(3).setCellValue(t.getSubject() != null && t.getSubject().getLevel() != null ? t.getSubject().getLevel().getName() : "");
+				for(int i=0; i<4; i++) {
+					if(r.getCell(i) != null) r.getCell(i).setCellStyle(dataStyle);
+				}
+			}
+
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			workbook.write(out);
+			ByteArrayResource resource = new ByteArrayResource(out.toByteArray());
+			return ResponseEntity.ok()
+					.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=question_import_template.xlsx")
+					.contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+					.body(resource);
+
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError().build();
+		}
+	}
+
+	private boolean isRowEmpty(Row row) {
+		if (row == null) return true;
+		for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
+			Cell cell = row.getCell(c);
+			if (cell != null && cell.getCellType() != CellType.BLANK && org.springframework.util.StringUtils.hasText(cell.toString())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private String getCellValueAsString(Cell cell) {
+		if (cell == null) return null;
+		switch (cell.getCellType()) {
+			case STRING:
+				return cell.getStringCellValue().trim();
+			case NUMERIC:
+				if (DateUtil.isCellDateFormatted(cell)) {
+					return cell.getDateCellValue().toString();
+				}
+				return String.valueOf(cell.getNumericCellValue());
+			case BOOLEAN:
+				return String.valueOf(cell.getBooleanCellValue());
+			default:
+				return "";
+		}
+	}
+
+	private ContentFormat parseContentFormat(String val) {
+		if ("LATEX".equalsIgnoreCase(val)) return ContentFormat.LATEX;
+		return ContentFormat.PLAIN_TEXT;
+	}
+
+	private QuestionType parseQuestionType(String val) {
+		if ("ESSAY".equalsIgnoreCase(val)) return QuestionType.ESSAY;
+		return QuestionType.MCQ;
+	}
+
+	private DifficultyLevel parseDifficulty(String val) {
+		if ("HARD".equalsIgnoreCase(val)) return DifficultyLevel.HARD;
+		if ("MEDIUM".equalsIgnoreCase(val)) return DifficultyLevel.MEDIUM;
+		return DifficultyLevel.EASY;
 	}
 
 	private void syncQuestionDetails(Question question, QuestionRequest request) {
