@@ -88,6 +88,7 @@ public class UserServiceImpl implements UserService {
                 response.createdAt(),
                 response.updatedAt(),
                 null, // Hide balance
+                response.enabled(),
                 response.streak()
             );
         }
@@ -235,6 +236,102 @@ public class UserServiceImpl implements UserService {
         return new ApiResponse<>(HttpStatus.OK.value(), "Tìm kiếm người dùng thành công!", responses);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<org.springframework.data.domain.Page<UserProfileResponse>> getAllUsers(org.springframework.data.domain.Pageable pageable, String query) {
+        org.springframework.data.domain.Page<User> userPage;
+        if (query != null && !query.trim().isEmpty()) {
+            userPage = userRepository.findByUsernameContainingOrEmailContaining(query, query, pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+
+        org.springframework.data.domain.Page<UserProfileResponse> responses = userPage.map(user -> {
+            UserInformation info = userInformationRepository.findByUser_Id(user.getId()).orElse(null);
+            UserStudyStreak streak = userStudyStreakRepository.findByUser_Id(user.getId()).orElse(null);
+            return toUserProfileResponse(user, info, streak);
+        });
+
+        return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách người dùng thành công!", responses);
+    }
+
+    @Override
+    public ApiResponse<UserProfileResponse> updateUserStatus(Integer id, boolean enabled) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy người dùng!");
+        }
+
+        user.setEnabled(enabled);
+        userRepository.save(user);
+
+        UserInformation info = userInformationRepository.findByUser_Id(id).orElse(null);
+        UserStudyStreak streak = userStudyStreakRepository.findByUser_Id(id).orElse(null);
+        return new ApiResponse<>(HttpStatus.OK.value(), (enabled ? "Mở khóa" : "Khóa") + " tài khoản thành công!", toUserProfileResponse(user, info, streak));
+    }
+
+    @Override
+    public ApiResponse<UserProfileResponse> updateUserBalance(Integer id, java.math.BigDecimal amount, String type) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy người dùng!");
+        }
+
+        Wallet wallet = walletRepository.findByUserId(id).orElseGet(() -> {
+            Wallet newWallet = new Wallet();
+            newWallet.setUser(user);
+            newWallet.setBalance(java.math.BigDecimal.ZERO);
+            return newWallet;
+        });
+
+        if ("ADD".equalsIgnoreCase(type)) {
+            wallet.setBalance(wallet.getBalance().add(amount));
+        } else if ("SUBTRACT".equalsIgnoreCase(type)) {
+            if (wallet.getBalance().compareTo(amount) < 0) {
+                return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Số dư không đủ để trừ!");
+            }
+            wallet.setBalance(wallet.getBalance().subtract(amount));
+        } else {
+            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Loại giao dịch không hợp lệ!");
+        }
+
+        walletRepository.save(wallet);
+
+        UserInformation info = userInformationRepository.findByUser_Id(id).orElse(null);
+        UserStudyStreak streak = userStudyStreakRepository.findByUser_Id(id).orElse(null);
+        return new ApiResponse<>(HttpStatus.OK.value(), "Cập nhật số dư thành công!", toUserProfileResponse(user, info, streak));
+    }
+
+    @Override
+    public ApiResponse<UserProfileResponse> updateUserInformationByAdmin(Integer id, UserInformationRequest request) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy người dùng!");
+        }
+
+        UserInformation userInformation = userInformationRepository.findByUser_Id(id).orElseGet(() -> {
+            UserInformation created = new UserInformation();
+            created.setUser(user);
+            created.setCreatedAt(LocalDateTime.now());
+            return created;
+        });
+
+        if (request.fullName() != null) userInformation.setFullName(normalize(request.fullName()));
+        if (request.schoolName() != null) userInformation.setSchoolName(normalize(request.schoolName()));
+        if (request.levelId() != null) {
+            Level level = levelRepository.findById(request.levelId()).orElse(null);
+            if (level != null) userInformation.setLevel(level);
+        }
+        if (request.dob() != null) userInformation.setDob(request.dob());
+        if (request.avatar() != null) userInformation.setAvatar(normalize(request.avatar()));
+
+        userInformation.setUpdatedAt(LocalDateTime.now());
+        userInformationRepository.save(userInformation);
+
+        UserStudyStreak streak = userStudyStreakRepository.findByUser_Id(id).orElse(null);
+        return new ApiResponse<>(HttpStatus.OK.value(), "Cập nhật thông tin người dùng bởi Admin thành công!", toUserProfileResponse(user, userInformation, streak));
+    }
+
     private UserProfileResponse toUserProfileResponse(User user, UserInformation userInformation, UserStudyStreak streak) {
         UserStreakResponse streakResponse = toStreakResponse(streak);
         String roleName = user.getRole() == null ? null : user.getRole().getName();
@@ -255,6 +352,7 @@ public class UserServiceImpl implements UserService {
                 user.getCreatedAt(),
                 userInformation != null ? userInformation.getUpdatedAt() : null,
                 walletRepository.findByUserId(user.getId()).map(Wallet::getBalance).orElse(java.math.BigDecimal.ZERO),
+                user.isEnabled(),
                 streakResponse
         );
     }

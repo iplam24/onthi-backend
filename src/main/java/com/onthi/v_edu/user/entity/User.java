@@ -40,6 +40,13 @@ public class User {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "enabled")
+    private Boolean enabled = true;
+
+    public boolean isEnabled() {
+        return enabled == null || enabled;
+    }
+
     @jakarta.persistence.Transient
     private String fullName;
 
