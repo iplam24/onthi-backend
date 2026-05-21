@@ -38,6 +38,8 @@ public class ExamResponse {
 
     private String type;
 
+    private Boolean isPublic;
+
     // UI hint for frontend rendering: STANDARD, LITERATURE, ESSAY, MIXED
     private String uiLayoutHint;
 

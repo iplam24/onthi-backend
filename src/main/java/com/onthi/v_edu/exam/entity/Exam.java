@@ -48,6 +48,9 @@ public class Exam {
 
     private String type; // AUTO / MANUAL
 
+    @Column(name = "is_public")
+    private Boolean isPublic;
+
     private String uiLayoutHint;
 
     private Boolean shuffleQuestions;

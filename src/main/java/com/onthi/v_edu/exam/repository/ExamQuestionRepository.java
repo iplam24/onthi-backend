@@ -20,5 +20,13 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Exam
     @Modifying
     @Query("update ExamQuestion eq set eq.deletedAt = current_timestamp where eq.question.id = :questionId and eq.deletedAt is null")
     int softDeleteByQuestionId(@Param("questionId") Integer questionId);
+
+    @Query("""
+            SELECT DISTINCT eq.question.id FROM ExamQuestion eq
+            WHERE eq.exam.createdBy.id = :userId
+              AND eq.exam.type = 'AUTO'
+              AND eq.deletedAt IS NULL
+            """)
+    List<Integer> findUsedQuestionIdsByUserId(@Param("userId") Integer userId);
 }
 

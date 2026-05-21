@@ -2,6 +2,7 @@ package com.onthi.v_edu.exam.controller;
 
 import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.exam.dto.ExamRequest;
+import com.onthi.v_edu.exam.dto.RandomExamRequest;
 import com.onthi.v_edu.exam.service.ExamService;
 import jakarta.validation.Valid;
 import org.springdoc.core.annotations.ParameterObject;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -73,4 +75,47 @@ public class ExamController {
 		ApiResponse<?> response = examService.deleteExam(id);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
+
+	// ==================== Random Exam & Performance APIs ====================
+
+	/**
+	 * Tạo đề thi ngẫu nhiên theo cấu hình (chủ đề, mức độ khó, số lượng câu)
+	 */
+	@PostMapping("/random")
+	public ResponseEntity<ApiResponse<?>> generateRandomExam(@Valid @RequestBody RandomExamRequest request) {
+		ApiResponse<?> response = examService.generateRandomExam(request);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	/**
+	 * Lịch sử thi của user: đề nào đã làm, mấy lần, có thể làm lại không
+	 */
+	@GetMapping("/me/history")
+	public ResponseEntity<ApiResponse<?>> getMyExamHistory(
+			@RequestParam(required = false) Integer subjectId,
+			@ParameterObject
+			@PageableDefault(size = 10) Pageable pageable) {
+		ApiResponse<?> response = examService.getMyExamHistory(subjectId, pageable);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	/**
+	 * Kiểm tra user có thể làm lại đề thi này không
+	 */
+	@GetMapping("/{examId}/retake-check")
+	public ResponseEntity<ApiResponse<?>> checkRetakeEligibility(@PathVariable Integer examId) {
+		ApiResponse<?> response = examService.checkRetakeEligibility(examId);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	/**
+	 * Đánh giá hiệu suất chi tiết sau khi hoàn thành bài thi
+	 * (phân tích điểm yếu/mạnh theo chủ đề, mức độ khó, gợi ý cải thiện, so sánh tiến bộ)
+	 */
+	@GetMapping("/attempts/{attemptId}/performance")
+	public ResponseEntity<ApiResponse<?>> getAttemptPerformance(@PathVariable Integer attemptId) {
+		ApiResponse<?> response = examService.getAttemptPerformance(attemptId);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
 }
+

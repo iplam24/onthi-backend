@@ -1,21 +1,33 @@
 package com.onthi.v_edu.exam.service;
 
+import com.onthi.v_edu.attempt.entity.Answer;
+import com.onthi.v_edu.attempt.entity.Attempt;
+import com.onthi.v_edu.attempt.repository.AnswerRepository;
+import com.onthi.v_edu.attempt.repository.AttemptRepository;
+import com.onthi.v_edu.common.constant.AttemptStatus;
+import com.onthi.v_edu.common.constant.DifficultyLevel;
 import com.onthi.v_edu.common.dto.ApiResponse;
 import com.onthi.v_edu.common.dto.PageResponse;
 import com.onthi.v_edu.config.security.services.UserDetailsImpl;
+import com.onthi.v_edu.exam.dto.ExamPerformanceResponse;
 import com.onthi.v_edu.exam.dto.ExamQuestionItemRequest;
 import com.onthi.v_edu.exam.dto.ExamQuestionItemResponse;
 import com.onthi.v_edu.exam.dto.ExamRequest;
 import com.onthi.v_edu.exam.dto.ExamResponse;
 import com.onthi.v_edu.exam.dto.ExamSectionResponse;
 import com.onthi.v_edu.exam.dto.QuestionOptionResponse;
+import com.onthi.v_edu.exam.dto.RandomExamRequest;
+import com.onthi.v_edu.exam.dto.RandomExamResponse;
+import com.onthi.v_edu.exam.dto.UserExamHistoryResponse;
 import com.onthi.v_edu.exam.entity.Exam;
 import com.onthi.v_edu.exam.entity.ExamQuestion;
 import com.onthi.v_edu.exam.entity.ExamQuestionId;
 import com.onthi.v_edu.exam.repository.ExamQuestionRepository;
 import com.onthi.v_edu.exam.repository.ExamRepository;
 import com.onthi.v_edu.learning.entity.Subject;
+import com.onthi.v_edu.learning.entity.Topic;
 import com.onthi.v_edu.learning.repository.SubjectRepository;
+import com.onthi.v_edu.learning.repository.TopicRepository;
 import com.onthi.v_edu.question.entity.Question;
 import com.onthi.v_edu.question.repository.QuestionOptionRepository;
 import com.onthi.v_edu.question.repository.QuestionRepository;
@@ -23,6 +35,7 @@ import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
 import com.onthi.v_edu.common.constant.QuestionType;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -34,7 +47,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,26 +66,42 @@ public class ExamServiceImpl implements ExamService {
 	private final QuestionRepository questionRepository;
 	private final UserRepository userRepository;
 	private final QuestionOptionRepository questionOptionRepository;
+	private final AttemptRepository attemptRepository;
+	private final AnswerRepository answerRepository;
+	private final TopicRepository topicRepository;
 
 	public ExamServiceImpl(ExamRepository examRepository,
 						   ExamQuestionRepository examQuestionRepository,
 						   SubjectRepository subjectRepository,
 						   QuestionRepository questionRepository,
 						   UserRepository userRepository,
-						   QuestionOptionRepository questionOptionRepository) {
+						   QuestionOptionRepository questionOptionRepository,
+						   AttemptRepository attemptRepository,
+						   AnswerRepository answerRepository,
+						   TopicRepository topicRepository) {
 		this.examRepository = examRepository;
 		this.examQuestionRepository = examQuestionRepository;
 		this.subjectRepository = subjectRepository;
 		this.questionRepository = questionRepository;
 		this.userRepository = userRepository;
 		this.questionOptionRepository = questionOptionRepository;
+		this.attemptRepository = attemptRepository;
+		this.answerRepository = answerRepository;
+		this.topicRepository = topicRepository;
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public ApiResponse<PageResponse<ExamResponse>> getAllExams(Pageable pageable) {
-		Page<ExamResponse> data = examRepository.findByDeletedAtIsNull(pageable)
-				.map(this::toExamResponse);
+		User currentUser = getCurrentUser();
+		Page<Exam> examPage;
+		if (currentUser != null && currentUser.getRole() != null && "ROLE_ADMIN".equalsIgnoreCase(currentUser.getRole().getName())) {
+			examPage = examRepository.findByDeletedAtIsNull(pageable);
+		} else {
+			Integer userId = currentUser != null ? currentUser.getId() : -1;
+			examPage = examRepository.findVisibleExams(userId, pageable);
+		}
+		Page<ExamResponse> data = examPage.map(this::toExamResponse);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi thành công!", PageResponse.from(data));
 	}
 
@@ -81,8 +112,15 @@ public class ExamServiceImpl implements ExamService {
 			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy subject!");
 		}
 
-		Page<ExamResponse> data = examRepository.findBySubject_IdAndDeletedAtIsNull(subjectId, pageable)
-				.map(this::toExamResponse);
+		User currentUser = getCurrentUser();
+		Page<Exam> examPage;
+		if (currentUser != null && currentUser.getRole() != null && "ROLE_ADMIN".equalsIgnoreCase(currentUser.getRole().getName())) {
+			examPage = examRepository.findBySubject_IdAndDeletedAtIsNull(subjectId, pageable);
+		} else {
+			Integer userId = currentUser != null ? currentUser.getId() : -1;
+			examPage = examRepository.findVisibleExamsBySubject(subjectId, userId, pageable);
+		}
+		Page<ExamResponse> data = examPage.map(this::toExamResponse);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách đề thi theo môn học thành công!", PageResponse.from(data));
 	}
 
@@ -203,6 +241,7 @@ public class ExamServiceImpl implements ExamService {
 		exam.setEndTime(request.getEndTime());
 		exam.setTotalScore(request.getTotalScore());
 		exam.setType(normalize(request.getType()));
+		exam.setIsPublic(request.getIsPublic());
 		exam.setUiLayoutHint(normalize(request.getUiLayoutHint()));
 		exam.setShuffleQuestions(request.getShuffleQuestions() != null ? request.getShuffleQuestions() : Boolean.FALSE);
 		exam.setShuffleAnswers(request.getShuffleAnswers() != null ? request.getShuffleAnswers() : Boolean.FALSE);
@@ -293,6 +332,7 @@ public class ExamServiceImpl implements ExamService {
 				exam.getEndTime(),
 				exam.getTotalScore(),
 				exam.getType(),
+				exam.getIsPublic() != null ? exam.getIsPublic() : "MANUAL".equalsIgnoreCase(exam.getType()),
 							uiLayoutHint,
 							sections,
 				exam.getShuffleQuestions(),
@@ -440,6 +480,533 @@ public class ExamServiceImpl implements ExamService {
 		}
 		return "STANDARD";
 	}
+
+	// ========================================================================================
+	// ===========================  RANDOM EXAM GENERATION  ==================================
+	// ========================================================================================
+
+	private static final List<AttemptStatus> COMPLETED_STATUSES = List.of(AttemptStatus.SUBMITTED, AttemptStatus.EXPIRED);
+
+	@Override
+	public ApiResponse<RandomExamResponse> generateRandomExam(RandomExamRequest request) {
+		User currentUser = getCurrentUser();
+		if (currentUser == null) {
+			return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập!");
+		}
+
+		Subject subject = subjectRepository.findById(request.getSubjectId()).orElse(null);
+		if (subject == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy môn học!");
+		}
+
+		// Validate difficulty configs
+		if (request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+			int diffTotal = request.getDifficultyConfigs().stream()
+					.mapToInt(RandomExamRequest.DifficultyConfig::getCount).sum();
+			if (diffTotal != request.getTotalQuestions()) {
+				return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(),
+						"Tổng số câu trong difficultyConfigs (" + diffTotal + ") phải bằng totalQuestions (" + request.getTotalQuestions() + ")!");
+			}
+		}
+
+		// Validate topic configs
+		if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()) {
+			int topicTotal = request.getTopicConfigs().stream()
+					.mapToInt(RandomExamRequest.TopicConfig::getCount).sum();
+			if (topicTotal != request.getTotalQuestions()) {
+				return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(),
+						"Tổng số câu trong topicConfigs (" + topicTotal + ") phải bằng totalQuestions (" + request.getTotalQuestions() + ")!");
+			}
+			for (RandomExamRequest.TopicConfig tc : request.getTopicConfigs()) {
+				if (!topicRepository.existsById(tc.getTopicId())) {
+					return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy topic với id=" + tc.getTopicId());
+				}
+			}
+		}
+
+		// Validate topic detailed configs
+		if (request.getTopicDetailedConfigs() != null && !request.getTopicDetailedConfigs().isEmpty()) {
+			int detailedTotal = 0;
+			for (RandomExamRequest.TopicDetailedConfig tc : request.getTopicDetailedConfigs()) {
+				int easy = tc.getEasyCount() != null ? tc.getEasyCount() : 0;
+				int medium = tc.getMediumCount() != null ? tc.getMediumCount() : 0;
+				int hard = tc.getHardCount() != null ? tc.getHardCount() : 0;
+				if (easy < 0 || medium < 0 || hard < 0) {
+					return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Số lượng câu hỏi không được âm!");
+				}
+				detailedTotal += (easy + medium + hard);
+				if (!topicRepository.existsById(tc.getTopicId())) {
+					return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy topic với id=" + tc.getTopicId());
+				}
+			}
+			if (detailedTotal != request.getTotalQuestions()) {
+				return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(),
+						"Tổng số câu trong topicDetailedConfigs (" + detailedTotal + ") phải bằng totalQuestions (" + request.getTotalQuestions() + ")!");
+			}
+		}
+
+		// Build exclude list for duplicate avoidance
+		boolean avoidDuplicates = !Boolean.FALSE.equals(request.getAvoidDuplicates());
+		List<Integer> excludeIds = new ArrayList<>();
+		if (avoidDuplicates) {
+			List<Integer> usedIds = examQuestionRepository.findUsedQuestionIdsByUserId(currentUser.getId());
+			if (usedIds != null && !usedIds.isEmpty()) {
+				excludeIds.addAll(usedIds);
+			}
+		}
+		if (excludeIds.isEmpty()) {
+			excludeIds.add(-1); // placeholder to avoid empty IN clause
+		}
+
+		// Select questions
+		List<Question> selectedQuestions;
+		boolean hasDuplicates = false;
+
+		if (request.getTopicDetailedConfigs() != null && !request.getTopicDetailedConfigs().isEmpty()) {
+			selectedQuestions = selectByTopicDetailed(request, excludeIds);
+		} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()
+				&& request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+			// Both topic and difficulty specified → distribute proportionally
+			selectedQuestions = selectByTopicAndDifficulty(request, excludeIds);
+		} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()) {
+			// Only topic specified
+			selectedQuestions = selectByTopicOnly(request, excludeIds);
+		} else if (request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+			// Only difficulty specified → from entire subject
+			selectedQuestions = selectByDifficultyOnly(request, excludeIds);
+		} else {
+			// No config → random from subject
+			selectedQuestions = questionRepository.findRandomBySubject(
+					request.getSubjectId(), excludeIds, PageRequest.of(0, request.getTotalQuestions()));
+		}
+
+		// Fallback: if not enough questions, retry without exclusion
+		if (selectedQuestions.size() < request.getTotalQuestions() && avoidDuplicates) {
+			hasDuplicates = true;
+			List<Integer> fallbackExclude = List.of(-1);
+			if (request.getTopicDetailedConfigs() != null && !request.getTopicDetailedConfigs().isEmpty()) {
+				selectedQuestions = selectByTopicDetailed(request, fallbackExclude);
+			} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()
+					&& request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+				selectedQuestions = selectByTopicAndDifficulty(request, fallbackExclude);
+			} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()) {
+				selectedQuestions = selectByTopicOnly(request, fallbackExclude);
+			} else if (request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+				selectedQuestions = selectByDifficultyOnly(request, fallbackExclude);
+			} else {
+				selectedQuestions = questionRepository.findRandomBySubject(
+						request.getSubjectId(), fallbackExclude, PageRequest.of(0, request.getTotalQuestions()));
+			}
+		}
+
+		if (selectedQuestions.isEmpty()) {
+			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không đủ câu hỏi trong ngân hàng đề để tạo đề thi!");
+		}
+
+		// Create Exam entity
+		String title = isBlank(request.getTitle())
+				? "Đề thi ngẫu nhiên - " + subject.getName() + " - " + LocalDateTime.now().toLocalDate()
+				: request.getTitle().trim();
+
+		Exam exam = new Exam();
+		exam.setTitle(title);
+		exam.setSubject(subject);
+		exam.setCreatedBy(currentUser);
+		exam.setDuration(request.getDuration());
+		exam.setIsActive(true);
+		exam.setTotalScore((double) selectedQuestions.size());
+		exam.setType("AUTO");
+		exam.setIsPublic(false);
+		exam.setShuffleQuestions(true);
+		exam.setShuffleAnswers(true);
+		exam.setMaxAttempts(request.getMaxAttempts());
+		exam.setCreatedAt(LocalDateTime.now());
+		exam = examRepository.save(exam);
+
+		// Create ExamQuestion entries
+		List<ExamQuestion> examQuestions = new ArrayList<>();
+		for (int i = 0; i < selectedQuestions.size(); i++) {
+			Question q = selectedQuestions.get(i);
+			ExamQuestion eq = new ExamQuestion();
+			eq.setId(new ExamQuestionId(exam.getId(), q.getId()));
+			eq.setExam(exam);
+			eq.setQuestion(q);
+			eq.setOrderIndex(i + 1);
+			eq.setScore(1.0);
+			eq.setContentSnapshot(q.getContent());
+			eq.setContentFormatSnapshot(q.getContentFormat());
+			examQuestions.add(eq);
+		}
+		examQuestionRepository.saveAll(examQuestions);
+
+		// Build distribution stats
+		Map<String, Integer> diffDist = new LinkedHashMap<>();
+		Map<String, Integer> topicDist = new LinkedHashMap<>();
+		for (Question q : selectedQuestions) {
+			String diff = q.getDifficulty() != null ? q.getDifficulty().name() : "UNKNOWN";
+			diffDist.merge(diff, 1, Integer::sum);
+			String topicName = q.getTopic() != null ? q.getTopic().getName() : "Không xác định";
+			topicDist.merge(topicName, 1, Integer::sum);
+		}
+
+		RandomExamResponse response = new RandomExamResponse(
+				exam.getId(), exam.getTitle(),
+				subject.getId(), subject.getName(),
+				exam.getDuration(), selectedQuestions.size(),
+				diffDist, topicDist,
+				!Boolean.FALSE.equals(request.getAllowRetake()),
+				request.getMaxAttempts(),
+				hasDuplicates,
+				exam.getCreatedAt()
+		);
+
+		String msg = hasDuplicates
+				? "Tạo đề thi thành công! (Lưu ý: do ngân hàng câu hỏi hạn chế, một số câu có thể trùng với đề cũ)"
+				: "Tạo đề thi ngẫu nhiên thành công!";
+		return new ApiResponse<>(HttpStatus.CREATED.value(), msg, response);
+	}
+
+	private List<Question> selectByTopicAndDifficulty(RandomExamRequest request, List<Integer> excludeIds) {
+		List<Question> result = new ArrayList<>();
+		List<RandomExamRequest.DifficultyConfig> diffs = request.getDifficultyConfigs();
+		int totalDiffCount = diffs.stream().mapToInt(RandomExamRequest.DifficultyConfig::getCount).sum();
+
+		for (RandomExamRequest.TopicConfig tc : request.getTopicConfigs()) {
+			for (RandomExamRequest.DifficultyConfig dc : diffs) {
+				int count = (int) Math.round((double) tc.getCount() * dc.getCount() / totalDiffCount);
+				if (count <= 0) continue;
+				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
+						tc.getTopicId(), dc.getDifficulty(), excludeIds, PageRequest.of(0, count));
+				result.addAll(questions);
+			}
+		}
+		return result;
+	}
+
+	private List<Question> selectByTopicOnly(RandomExamRequest request, List<Integer> excludeIds) {
+		List<Question> result = new ArrayList<>();
+		for (RandomExamRequest.TopicConfig tc : request.getTopicConfigs()) {
+			List<Question> questions = questionRepository.findRandomByTopic(
+					tc.getTopicId(), excludeIds, PageRequest.of(0, tc.getCount()));
+			result.addAll(questions);
+		}
+		return result;
+	}
+
+	private List<Question> selectByDifficultyOnly(RandomExamRequest request, List<Integer> excludeIds) {
+		List<Question> result = new ArrayList<>();
+		for (RandomExamRequest.DifficultyConfig dc : request.getDifficultyConfigs()) {
+			List<Question> questions = questionRepository.findRandomBySubjectAndDifficulty(
+					request.getSubjectId(), dc.getDifficulty(), excludeIds, PageRequest.of(0, dc.getCount()));
+			result.addAll(questions);
+		}
+		return result;
+	}
+
+	private List<Question> selectByTopicDetailed(RandomExamRequest request, List<Integer> excludeIds) {
+		List<Question> result = new ArrayList<>();
+		for (RandomExamRequest.TopicDetailedConfig tc : request.getTopicDetailedConfigs()) {
+			int easy = tc.getEasyCount() != null ? tc.getEasyCount() : 0;
+			int medium = tc.getMediumCount() != null ? tc.getMediumCount() : 0;
+			int hard = tc.getHardCount() != null ? tc.getHardCount() : 0;
+
+			if (easy > 0) {
+				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
+						tc.getTopicId(), DifficultyLevel.EASY, excludeIds, PageRequest.of(0, easy));
+				result.addAll(questions);
+			}
+			if (medium > 0) {
+				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
+						tc.getTopicId(), DifficultyLevel.MEDIUM, excludeIds, PageRequest.of(0, medium));
+				result.addAll(questions);
+			}
+			if (hard > 0) {
+				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
+						tc.getTopicId(), DifficultyLevel.HARD, excludeIds, PageRequest.of(0, hard));
+				result.addAll(questions);
+			}
+		}
+		return result;
+	}
+
+	// ========================================================================================
+	// ==============================  EXAM HISTORY  ==========================================
+	// ========================================================================================
+
+	@Override
+	@Transactional(readOnly = true)
+	public ApiResponse<PageResponse<UserExamHistoryResponse>> getMyExamHistory(Integer subjectId, Pageable pageable) {
+		User currentUser = getCurrentUser();
+		if (currentUser == null) {
+			return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập!");
+		}
+
+		Page<Integer> examIdsPage = attemptRepository.findDistinctExamIdsByUserId(
+				currentUser.getId(), COMPLETED_STATUSES, subjectId, pageable);
+
+		Page<UserExamHistoryResponse> result = examIdsPage.map(examId -> {
+			Exam exam = examRepository.findById(examId).orElse(null);
+			if (exam == null) return null;
+
+			long attemptCount = attemptRepository.countCompletedAttempts(currentUser.getId(), examId, COMPLETED_STATUSES);
+			Double bestScore = attemptRepository.findBestScore(currentUser.getId(), examId, COMPLETED_STATUSES);
+			List<Attempt> latestAttempts = attemptRepository.findLatestAttempts(
+					currentUser.getId(), examId, COMPLETED_STATUSES, PageRequest.of(0, 1));
+			Attempt latest = latestAttempts.isEmpty() ? null : latestAttempts.get(0);
+
+			Integer maxAttempts = exam.getMaxAttempts();
+			boolean canRetake = (maxAttempts == null || maxAttempts <= 0 || attemptCount < maxAttempts)
+					&& Boolean.TRUE.equals(exam.getIsActive());
+
+			Subject sub = exam.getSubject();
+			return new UserExamHistoryResponse(
+					examId, exam.getTitle(),
+					sub != null ? sub.getId() : null,
+					sub != null ? sub.getName() : null,
+					(int) attemptCount, maxAttempts, canRetake,
+					bestScore,
+					latest != null ? latest.getScore() : null,
+					latest != null ? latest.getSubmittedAt() : null,
+					exam.getType()
+			);
+		});
+
+		// Filter null entries
+		List<UserExamHistoryResponse> filtered = result.getContent().stream()
+				.filter(java.util.Objects::nonNull).toList();
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy lịch sử thi thành công!", PageResponse.from(result));
+	}
+
+	// ========================================================================================
+	// ===========================  PERFORMANCE EVALUATION  ==================================
+	// ========================================================================================
+
+	@Override
+	@Transactional(readOnly = true)
+	public ApiResponse<ExamPerformanceResponse> getAttemptPerformance(Integer attemptId) {
+		User currentUser = getCurrentUser();
+		if (currentUser == null) {
+			return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập!");
+		}
+
+		Attempt attempt = attemptRepository.findByIdAndUser_Id(attemptId, currentUser.getId()).orElse(null);
+		if (attempt == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy lượt làm bài!");
+		}
+
+		if (attempt.getStatus() != AttemptStatus.SUBMITTED) {
+			return new ApiResponse<>(HttpStatus.OK.value(), "GRADING", null);
+		}
+
+		List<Answer> answers = answerRepository.findByAttemptIdWithDetails(attemptId);
+		Exam exam = attempt.getExam();
+		int totalQuestions = attempt.getTotalQuestions() != null ? attempt.getTotalQuestions() : answers.size();
+		int correctCount = attempt.getCorrectCount() != null ? attempt.getCorrectCount() : 0;
+		int wrongCount = attempt.getWrongCount() != null ? attempt.getWrongCount() : 0;
+		int unanswered = totalQuestions - correctCount - wrongCount;
+		double percentage = totalQuestions > 0 ? (double) correctCount / totalQuestions * 100 : 0;
+
+		// --- Topic Analysis ---
+		Map<Integer, List<Answer>> byTopic = new LinkedHashMap<>();
+		Map<Integer, String> topicNames = new HashMap<>();
+		for (Answer a : answers) {
+			Question q = a.getQuestion();
+			Integer topicId = (q != null && q.getTopic() != null) ? q.getTopic().getId() : -1;
+			String topicName = (q != null && q.getTopic() != null) ? q.getTopic().getName() : "Không xác định";
+			byTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(a);
+			topicNames.putIfAbsent(topicId, topicName);
+		}
+
+		List<ExamPerformanceResponse.TopicAnalysis> topicAnalyses = new ArrayList<>();
+		for (Map.Entry<Integer, List<Answer>> entry : byTopic.entrySet()) {
+			List<Answer> topicAnswers = entry.getValue();
+			int tCorrect = (int) topicAnswers.stream().filter(a -> Boolean.TRUE.equals(a.getIsCorrect())).count();
+			int tTotal = topicAnswers.size();
+			double tPct = tTotal > 0 ? (double) tCorrect / tTotal * 100 : 0;
+			topicAnalyses.add(new ExamPerformanceResponse.TopicAnalysis(
+					entry.getKey() == -1 ? null : entry.getKey(),
+					topicNames.get(entry.getKey()),
+					tTotal, tCorrect, Math.round(tPct * 10.0) / 10.0,
+					tPct >= 75 ? "STRONG" : tPct >= 50 ? "AVERAGE" : "WEAK"
+			));
+		}
+
+		// --- Difficulty Analysis ---
+		Map<String, List<Answer>> byDifficulty = new LinkedHashMap<>();
+		for (Answer a : answers) {
+			Question q = a.getQuestion();
+			String diff = (q != null && q.getDifficulty() != null) ? q.getDifficulty().name() : "UNKNOWN";
+			byDifficulty.computeIfAbsent(diff, k -> new ArrayList<>()).add(a);
+		}
+
+		List<ExamPerformanceResponse.DifficultyAnalysis> diffAnalyses = new ArrayList<>();
+		for (Map.Entry<String, List<Answer>> entry : byDifficulty.entrySet()) {
+			List<Answer> diffAnswers = entry.getValue();
+			int dCorrect = (int) diffAnswers.stream().filter(a -> Boolean.TRUE.equals(a.getIsCorrect())).count();
+			int dTotal = diffAnswers.size();
+			double dPct = dTotal > 0 ? (double) dCorrect / dTotal * 100 : 0;
+			diffAnalyses.add(new ExamPerformanceResponse.DifficultyAnalysis(
+					entry.getKey(), dTotal, dCorrect, Math.round(dPct * 10.0) / 10.0,
+					dPct >= 75 ? "STRONG" : dPct >= 50 ? "AVERAGE" : "WEAK"
+			));
+		}
+
+		// --- Weaknesses ---
+		List<ExamPerformanceResponse.WeaknessItem> weaknesses = new ArrayList<>();
+		for (ExamPerformanceResponse.TopicAnalysis ta : topicAnalyses) {
+			if (ta.getPercentage() < 50) {
+				weaknesses.add(new ExamPerformanceResponse.WeaknessItem(
+						ta.getTopicName(), "TOPIC", ta.getPercentage(),
+						"Bạn chỉ đúng " + ta.getCorrectCount() + "/" + ta.getTotalQuestions() + " câu ở chủ đề " + ta.getTopicName()
+				));
+			}
+		}
+		for (ExamPerformanceResponse.DifficultyAnalysis da : diffAnalyses) {
+			if (da.getPercentage() < 50) {
+				String diffLabel = switch (da.getDifficulty()) {
+					case "EASY" -> "Dễ";
+					case "MEDIUM" -> "Trung bình";
+					case "HARD" -> "Khó";
+					default -> da.getDifficulty();
+				};
+				weaknesses.add(new ExamPerformanceResponse.WeaknessItem(
+						diffLabel, "DIFFICULTY", da.getPercentage(),
+						"Bạn chỉ đúng " + da.getCorrectCount() + "/" + da.getTotalQuestions() + " câu mức độ " + diffLabel
+				));
+			}
+		}
+
+		// --- Recommendations ---
+		List<String> recommendations = new ArrayList<>();
+		for (ExamPerformanceResponse.WeaknessItem w : weaknesses) {
+			if ("TOPIC".equals(w.getType())) {
+				recommendations.add("Bạn cần ôn tập thêm chủ đề: " + w.getArea());
+			}
+		}
+		ExamPerformanceResponse.DifficultyAnalysis easyAnalysis = diffAnalyses.stream()
+				.filter(d -> "EASY".equals(d.getDifficulty())).findFirst().orElse(null);
+		ExamPerformanceResponse.DifficultyAnalysis hardAnalysis = diffAnalyses.stream()
+				.filter(d -> "HARD".equals(d.getDifficulty())).findFirst().orElse(null);
+		if (easyAnalysis != null && easyAnalysis.getPercentage() < 60) {
+			recommendations.add("Bạn cần củng cố kiến thức cơ bản - câu dễ vẫn sai nhiều.");
+		}
+		if (hardAnalysis != null && hardAnalysis.getPercentage() < 30) {
+			recommendations.add("Bạn cần luyện thêm các câu hỏi nâng cao mức khó.");
+		}
+		if (exam != null && exam.getDuration() != null && attempt.getDurationTaken() != null) {
+			double timeUsedPct = (double) attempt.getDurationTaken() / (exam.getDuration() * 60) * 100;
+			if (timeUsedPct > 90) {
+				recommendations.add("Bạn gần hết thời gian, cần cải thiện tốc độ làm bài.");
+			}
+		}
+		if (percentage >= 90) {
+			recommendations.add("Xuất sắc! Hãy thử thách bản thân với đề khó hơn.");
+		} else if (percentage < 40) {
+			recommendations.add("Điểm còn thấp, hãy ôn tập lại toàn bộ kiến thức trước khi thi lại.");
+		}
+
+		// --- Progress Comparison ---
+		ExamPerformanceResponse.ProgressComparison progress = null;
+		if (exam != null) {
+			List<Attempt> prevAttempts = attemptRepository.findByUser_IdAndExam_IdAndStatusInOrderBySubmittedAtDesc(
+					currentUser.getId(), exam.getId(), COMPLETED_STATUSES);
+			int attemptNumber = prevAttempts.size();
+			if (prevAttempts.size() >= 2) {
+				// Current is first in list (most recent), previous is second
+				Attempt previous = prevAttempts.get(1);
+				Double prevScore = previous.getScore();
+				Double currScore = attempt.getScore();
+				double improvement = (currScore != null && prevScore != null && prevScore > 0)
+						? ((currScore - prevScore) / prevScore * 100) : 0;
+				String trend = improvement > 5 ? "IMPROVING" : improvement < -5 ? "DECLINING" : "STABLE";
+				progress = new ExamPerformanceResponse.ProgressComparison(
+						prevScore, currScore, Math.round(improvement * 10.0) / 10.0, trend, attemptNumber
+				);
+			} else if (attemptNumber == 1) {
+				progress = new ExamPerformanceResponse.ProgressComparison(
+						null, attempt.getScore(), null, "FIRST_ATTEMPT", 1
+				);
+			}
+		}
+
+		String overallRating = percentage >= 90 ? "EXCELLENT"
+				: percentage >= 75 ? "GOOD"
+				: percentage >= 60 ? "AVERAGE"
+				: percentage >= 40 ? "WEAK" : "VERY_WEAK";
+
+		ExamPerformanceResponse response = new ExamPerformanceResponse(
+				attemptId,
+				exam != null ? exam.getId() : null,
+				exam != null ? exam.getTitle() : null,
+				attempt.getScore(),
+				Math.round(percentage * 10.0) / 10.0,
+				overallRating,
+				correctCount, wrongCount, unanswered, totalQuestions,
+				attempt.getDurationTaken(),
+				topicAnalyses, diffAnalyses,
+				weaknesses, recommendations, progress
+		);
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Đánh giá hiệu suất thành công!", response);
+	}
+
+	// ========================================================================================
+	// ============================  RETAKE ELIGIBILITY  =====================================
+	// ========================================================================================
+
+	@Override
+	@Transactional(readOnly = true)
+	public ApiResponse<Map<String, Object>> checkRetakeEligibility(Integer examId) {
+		User currentUser = getCurrentUser();
+		if (currentUser == null) {
+			return new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "Bạn cần đăng nhập!");
+		}
+
+		Exam exam = examRepository.findByIdAndDeletedAtIsNull(examId).orElse(null);
+		if (exam == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy đề thi!");
+		}
+
+		long attemptCount = attemptRepository.countByUser_IdAndExam_Id(currentUser.getId(), examId);
+		Integer maxAttempts = exam.getMaxAttempts();
+		boolean isActive = Boolean.TRUE.equals(exam.getIsActive());
+		boolean withinTime = true;
+		LocalDateTime now = LocalDateTime.now();
+		if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) withinTime = false;
+		if (exam.getEndTime() != null && now.isAfter(exam.getEndTime())) withinTime = false;
+
+		boolean canRetake;
+		String reason;
+		if (!isActive) {
+			canRetake = false;
+			reason = "Đề thi hiện không được mở.";
+		} else if (!withinTime) {
+			canRetake = false;
+			reason = "Đề thi ngoài khung thời gian cho phép.";
+		} else if (maxAttempts != null && maxAttempts > 0 && attemptCount >= maxAttempts) {
+			canRetake = false;
+			reason = "Bạn đã dùng hết " + maxAttempts + " lượt làm bài.";
+		} else {
+			canRetake = true;
+			reason = maxAttempts != null && maxAttempts > 0
+					? "Bạn còn " + (maxAttempts - attemptCount) + " lượt làm bài."
+					: "Không giới hạn số lần làm bài.";
+		}
+
+		Map<String, Object> data = new LinkedHashMap<>();
+		data.put("canRetake", canRetake);
+		data.put("reason", reason);
+		data.put("attemptCount", (int) attemptCount);
+		data.put("maxAttempts", maxAttempts);
+		data.put("examActive", isActive);
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Kiểm tra quyền làm lại thành công!", data);
+	}
+
+	// ========================================================================================
+	// ================================  HELPERS  =============================================
+	// ========================================================================================
 
 	private User getCurrentUser() {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

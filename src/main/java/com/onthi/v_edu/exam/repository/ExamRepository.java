@@ -13,5 +13,13 @@ public interface ExamRepository extends JpaRepository<Exam, Integer> {
     Page<Exam> findByDeletedAtIsNull(Pageable pageable);
 
     java.util.Optional<Exam> findByIdAndDeletedAtIsNull(Integer id);
+
+    @org.springframework.data.jpa.repository.Query("SELECT e FROM Exam e WHERE e.deletedAt IS NULL AND " +
+            "(e.isPublic = true OR (e.isPublic IS NULL AND e.type = 'MANUAL') OR (e.createdBy IS NOT NULL AND e.createdBy.id = :userId))")
+    Page<Exam> findVisibleExams(@org.springframework.data.repository.query.Param("userId") Integer userId, Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Query("SELECT e FROM Exam e WHERE e.deletedAt IS NULL AND e.subject.id = :subjectId AND " +
+            "(e.isPublic = true OR (e.isPublic IS NULL AND e.type = 'MANUAL') OR (e.createdBy IS NOT NULL AND e.createdBy.id = :userId))")
+    Page<Exam> findVisibleExamsBySubject(@org.springframework.data.repository.query.Param("subjectId") Integer subjectId, @org.springframework.data.repository.query.Param("userId") Integer userId, Pageable pageable);
 }
 

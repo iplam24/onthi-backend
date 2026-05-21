@@ -32,6 +32,8 @@ public class ExamRequest {
 
     private String type;
 
+    private Boolean isPublic;
+
     private String uiLayoutHint;
 
     private Boolean shuffleQuestions;

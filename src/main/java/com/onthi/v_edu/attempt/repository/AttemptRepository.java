@@ -57,4 +57,49 @@ public interface AttemptRepository extends JpaRepository<Attempt, Integer> {
                                    @Param("to") LocalDateTime to,
                                    @Param("keyword") String keyword,
                                    Pageable pageable);
+
+    // --- Random exam / history queries ---
+
+    List<Attempt> findByUser_IdAndExam_IdAndStatusInOrderBySubmittedAtDesc(
+            Integer userId, Integer examId, List<AttemptStatus> statuses);
+
+    @Query("""
+            SELECT COUNT(a) FROM Attempt a
+            WHERE a.user.id = :userId AND a.exam.id = :examId
+              AND a.status IN :statuses
+            """)
+    long countCompletedAttempts(@Param("userId") Integer userId,
+                                @Param("examId") Integer examId,
+                                @Param("statuses") List<AttemptStatus> statuses);
+
+    @Query("""
+            SELECT DISTINCT a.exam.id FROM Attempt a
+            WHERE a.user.id = :userId
+              AND a.status IN :statuses
+              AND (:subjectId IS NULL OR a.exam.subject.id = :subjectId)
+            """)
+    Page<Integer> findDistinctExamIdsByUserId(@Param("userId") Integer userId,
+                                              @Param("statuses") List<AttemptStatus> statuses,
+                                              @Param("subjectId") Integer subjectId,
+                                              Pageable pageable);
+
+    @Query("""
+            SELECT MAX(a.score) FROM Attempt a
+            WHERE a.user.id = :userId AND a.exam.id = :examId
+              AND a.status IN :statuses
+            """)
+    Double findBestScore(@Param("userId") Integer userId,
+                         @Param("examId") Integer examId,
+                         @Param("statuses") List<AttemptStatus> statuses);
+
+    @Query("""
+            SELECT a FROM Attempt a
+            WHERE a.user.id = :userId AND a.exam.id = :examId
+              AND a.status IN :statuses
+            ORDER BY a.submittedAt DESC
+            """)
+    List<Attempt> findLatestAttempts(@Param("userId") Integer userId,
+                                     @Param("examId") Integer examId,
+                                     @Param("statuses") List<AttemptStatus> statuses,
+                                     Pageable pageable);
 }
