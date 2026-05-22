@@ -5,6 +5,8 @@ import com.onthi.v_edu.question.entity.QuestionOption;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.HashSet;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,14 @@ public class Answer {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "selected_option_id")
     private QuestionOption selectedOption;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "answer_selected_options",
+        joinColumns = @JoinColumn(name = "answer_id"),
+        inverseJoinColumns = @JoinColumn(name = "option_id")
+    )
+    private Set<QuestionOption> selectedOptions = new HashSet<>();
 
     @Column(name = "essay_answer", columnDefinition = "TEXT")
     private String essayAnswer;

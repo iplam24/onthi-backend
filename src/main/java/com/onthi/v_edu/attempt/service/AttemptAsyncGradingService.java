@@ -21,9 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -102,20 +104,42 @@ public class AttemptAsyncGradingService {
 
                 if (qType == QuestionType.MCQ) {
                     // 1. CHẤM ĐIỂM TRẮC NGHIỆM (LOCAL) - KHÔNG GỬI QUA AI
-                    QuestionOption correctOption = qOptions.stream().filter(QuestionOption::getIsCorrect).findFirst().orElse(null);
-                    correctAnswerText = correctOption != null ? correctOption.getContent() : "(Chưa có đáp án đúng)";
+                    List<QuestionOption> correctOptions = qOptions.stream()
+                            .filter(o -> o.getIsCorrect() != null && o.getIsCorrect())
+                            .toList();
+                    
+                    correctAnswerText = correctOptions.isEmpty() 
+                            ? "(Chưa có đáp án đúng)" 
+                            : correctOptions.stream().map(QuestionOption::getContent).collect(Collectors.joining(", "));
                     answer.setCorrectAnswerSnapshot(correctAnswerText);
                     
-                    studentAnswerText = answer.getSelectedOption() != null ? 
-                            qOptions.stream().filter(o -> o.getId().equals(answer.getSelectedOption().getId())).findFirst()
-                                    .map(QuestionOption::getContent).orElse("(Không chọn)") : "(Không chọn)";
+                    List<Integer> selectedOptionIds = new ArrayList<>();
+                    if (answer.getSelectedOptions() != null && !answer.getSelectedOptions().isEmpty()) {
+                        selectedOptionIds = answer.getSelectedOptions().stream()
+                                .map(QuestionOption::getId)
+                                .toList();
+                    } else if (answer.getSelectedOption() != null) {
+                        selectedOptionIds = List.of(answer.getSelectedOption().getId());
+                    }
                     
-                    boolean isCorrect = answer.getSelectedOption() != null && correctOption != null && 
-                                       answer.getSelectedOption().getId().equals(correctOption.getId());
+                    final List<Integer> finalSelectedOptionIds = selectedOptionIds;
+                    List<QuestionOption> chosenOptions = qOptions.stream()
+                            .filter(o -> finalSelectedOptionIds.contains(o.getId()))
+                            .toList();
+                    
+                    studentAnswerText = chosenOptions.isEmpty() 
+                            ? "(Không chọn)" 
+                            : chosenOptions.stream().map(QuestionOption::getContent).collect(Collectors.joining(", "));
+                    
+                    // Kiểm tra bằng nhau giữa hai tập hợp (Set Equality Check)
+                    Set<Integer> correctSet = correctOptions.stream().map(QuestionOption::getId).collect(Collectors.toSet());
+                    Set<Integer> studentSet = new HashSet<>(selectedOptionIds);
+                    
+                    boolean isCorrect = !correctSet.isEmpty() && correctSet.equals(studentSet);
                     
                     answer.setIsCorrect(isCorrect);
                     answer.setScore(isCorrect ? maxScore : 0.0);
-                    answer.setAiFeedback(isCorrect ? "Đáp án chính xác." : "Đáp án sai. Đáp án đúng là: " + correctAnswerText);
+                    answer.setAiFeedback(isCorrect ? "Đáp án chính xác." : "Đáp án chưa chính xác. Đáp án đúng là: " + correctAnswerText);
                     answer.setAiGradingMethod("Nhận xét của giáo viên");
                     
                     logger.info("[ASYNC GRADING] Câu hỏi MCQ (ID: {}) chấm LOCAL, không gửi AI.", qId);

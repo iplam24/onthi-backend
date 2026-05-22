@@ -227,12 +227,30 @@ public class AttemptServiceImpl implements AttemptService {
                 answer.setUpdatedAt(now);
 
                 if (question.getType() == QuestionType.MCQ) {
+                    List<Integer> optionIds = submitted.getSelectedOptionIds();
                     Integer selectedOptionId = submitted.getSelectedOptionId();
-                    if (selectedOptionId != null) {
-                        // Chỉ lưu reference, không cần query đúng/sai ở đây để tối ưu tốc độ
-                        QuestionOption selectedOption = new QuestionOption();
-                        selectedOption.setId(selectedOptionId);
-                        answer.setSelectedOption(selectedOption);
+
+                    if ((optionIds == null || optionIds.isEmpty()) && selectedOptionId != null) {
+                        optionIds = List.of(selectedOptionId);
+                    }
+
+                    if (optionIds != null && !optionIds.isEmpty()) {
+                        // Set the legacy selectedOption using the first option id
+                        Integer firstId = optionIds.get(0);
+                        QuestionOption legacyOption = new QuestionOption();
+                        legacyOption.setId(firstId);
+                        answer.setSelectedOption(legacyOption);
+
+                        // Set the collection of selectedOptions
+                        Set<QuestionOption> selectedOptionsSet = new HashSet<>();
+                        for (Integer optId : optionIds) {
+                            if (optId != null) {
+                                QuestionOption opt = new QuestionOption();
+                                opt.setId(optId);
+                                selectedOptionsSet.add(opt);
+                            }
+                        }
+                        answer.setSelectedOptions(selectedOptionsSet);
                     }
                 }
                 
@@ -259,7 +277,7 @@ public class AttemptServiceImpl implements AttemptService {
             attempt.setTabSwitchCount(tabSwitchCount);
             attempt.setViolationScore(violationScore);
             attempt.setFlagged(tabSwitchCount >= TAB_SWITCH_FLAG_THRESHOLD || violationScore >= VIOLATION_SCORE_FLAG_THRESHOLD);
-            attemptRepository.save(attempt);
+            attempt = attemptRepository.save(attempt);
             
             userService.recordStudyActivity(currentUser.getId(), now.toLocalDate());
             
@@ -270,8 +288,7 @@ public class AttemptServiceImpl implements AttemptService {
                 String.format("Vừa nộp bài thi: %s", attempt.getExam().getTitle())
             );
 
-            System.out.println("  [DEBUG] Đã nộp bài thành công. Lượt làm bài ID: " + attempt.getId() + " đang ở trạng thái GRADING.");
-            System.out.println("  [DEBUG] Server sẽ tự động chấm bài trong vài giây tới qua Scheduler.");
+            System.out.println("  [DEBUG] Đã nộp bài thành công. Bài thi đã được chuyển sang trạng thái GRADING.");
             
             return new ApiResponse<>(HttpStatus.OK.value(), "Nộp bài thành công! Bài làm của bạn đã được đưa vào hàng chờ chấm điểm tự động.", toAttemptDetailResponse(attempt));
             
@@ -532,17 +549,26 @@ public class AttemptServiceImpl implements AttemptService {
         AttemptSummaryResponse summary = toAttemptSummaryResponse(attempt);
 
         List<AttemptAnswerResponse> answers = answerRepository.findByAttemptIdWithDetails(attempt.getId()).stream()
-                .map(answer -> new AttemptAnswerResponse(
-                        answer.getQuestion() != null ? answer.getQuestion().getId() : null,
-                        answer.getQuestion() != null ? answer.getQuestion().getContent() : null,
-                        answer.getQuestionFormatSnapshot(),
-                        answer.getSelectedOption() != null ? answer.getSelectedOption().getId() : null,
-                        answer.getEssayAnswer(),
-                        answer.getIsCorrect(),
-                        answer.getScore(),
-                        answer.getAiFeedback(),
-                        answer.getAiGradingMethod()
-                ))
+                .map(answer -> {
+                    List<Integer> selectedOptionIds = null;
+                    if (answer.getSelectedOptions() != null) {
+                        selectedOptionIds = answer.getSelectedOptions().stream()
+                                .map(QuestionOption::getId)
+                                .toList();
+                    }
+                    return new AttemptAnswerResponse(
+                            answer.getQuestion() != null ? answer.getQuestion().getId() : null,
+                            answer.getQuestion() != null ? answer.getQuestion().getContent() : null,
+                            answer.getQuestionFormatSnapshot(),
+                            answer.getSelectedOption() != null ? answer.getSelectedOption().getId() : null,
+                            selectedOptionIds,
+                            answer.getEssayAnswer(),
+                            answer.getIsCorrect(),
+                            answer.getScore(),
+                            answer.getAiFeedback(),
+                            answer.getAiGradingMethod()
+                    );
+                })
                 .toList();
 
         return new AttemptDetailResponse(

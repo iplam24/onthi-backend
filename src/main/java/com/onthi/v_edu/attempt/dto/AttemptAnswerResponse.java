@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.List;
 
 @Getter
 @Setter
@@ -20,6 +21,8 @@ public class AttemptAnswerResponse {
 
     private Integer selectedOptionId;
 
+    private List<Integer> selectedOptionIds;
+
     private String essayAnswer;
 
     private Boolean isCorrect;
@@ -30,4 +33,5 @@ public class AttemptAnswerResponse {
 
     private String gradingMethod;
 }
+
 
