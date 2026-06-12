@@ -15,10 +15,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<?>> handleValidationException(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .findFirst()
                 .map(error -> error.getDefaultMessage())
+                .reduce((m1, m2) -> m1 + ", " + m2)
                 .orElse("Dữ liệu đầu vào không hợp lệ");
         ApiResponse<?> response = new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), message);
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<?>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        String message = "Dữ liệu JSON gửi lên không đúng định dạng hoặc sai kiểu dữ liệu.";
+        if (ex.getCause() instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException) {
+            message = "Sai kiểu dữ liệu đầu vào. Vui lòng kiểm tra lại.";
+        }
+        ApiResponse<?> response = new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), message);
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<?>> handleMissingServletRequestParameterException(org.springframework.web.bind.MissingServletRequestParameterException ex) {
+        ApiResponse<?> response = new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Thiếu tham số bắt buộc: " + ex.getParameterName());
+        return ResponseEntity.status(response.getStatus()).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<?>> handleMethodArgumentTypeMismatchException(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        ApiResponse<?> response = new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Tham số '" + ex.getName() + "' sai kiểu dữ liệu.");
         return ResponseEntity.status(response.getStatus()).body(response);
     }
 

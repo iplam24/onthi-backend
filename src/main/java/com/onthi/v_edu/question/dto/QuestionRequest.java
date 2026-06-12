@@ -14,20 +14,20 @@ import java.util.List;
 @Getter
 @Setter
 public class QuestionRequest {
-	@NotBlank
+	@NotBlank(message = "Nội dung câu hỏi không được để trống")
 	private String content;
 
 	private ContentFormat contentFormat;
 
 	private String url;
 
-	@NotNull
+	@NotNull(message = "Vui lòng chọn loại câu hỏi")
 	private QuestionType type;
 
-	@NotNull
+	@NotNull(message = "Vui lòng chọn mức độ khó")
 	private DifficultyLevel difficulty;
 
-	@NotNull
+	@NotNull(message = "Vui lòng chọn chủ đề")
 	private Integer topicId;
 
 	private List<@Valid OptionRequest> options;

@@ -257,16 +257,26 @@ public class QuestionServiceImpl implements QuestionService {
 						req.setSampleAnswer(getCellValueAsString(essayCell));
 					} else {
 						List<OptionRequest> options = new ArrayList<>();
-						for (int i = 0; i < 4; i++) {
-							int contentCol = 9 + (i * 2);
-							int isCorrectCol = 10 + (i * 2);
-							String optContent = getCellValueAsString(currentRow.getCell(contentCol));
-							String optCorrect = getCellValueAsString(currentRow.getCell(isCorrectCol));
-							
+						String correctListStr = getCellValueAsString(currentRow.getCell(13));
+						List<String> correctLetters = new ArrayList<>();
+						if (org.springframework.util.StringUtils.hasText(correctListStr)) {
+							String cleanCorrect = correctListStr.toUpperCase().replaceAll("\\s+", "");
+							for (String part : cleanCorrect.split(",")) {
+								if (org.springframework.util.StringUtils.hasText(part)) {
+									correctLetters.add(part.trim());
+								}
+							}
+						}
+
+						char[] optionLetters = {'A', 'B', 'C', 'D'};
+						for (int i = 0; i < optionLetters.length; i++) {
+							int colIdx = 9 + i;
+							String optContent = getCellValueAsString(currentRow.getCell(colIdx));
 							if (org.springframework.util.StringUtils.hasText(optContent)) {
 								OptionRequest opt = new OptionRequest();
 								opt.setContent(optContent);
-								opt.setIsCorrect(Boolean.parseBoolean(optCorrect));
+								String letter = String.valueOf(optionLetters[i]);
+								opt.setIsCorrect(correctLetters.contains(letter));
 								options.add(opt);
 							}
 						}
@@ -308,10 +318,7 @@ public class QuestionServiceImpl implements QuestionService {
 					"STT", "Topic ID", "Nội dung câu hỏi", "Định dạng (PLAIN_TEXT/LATEX)", 
 					"Tên file ảnh (tuỳ chọn)", "Loại (MCQ/ESSAY)", "Độ khó (EASY/MEDIUM/HARD)", 
 					"Giải thích (tuỳ chọn)", "Đáp án tự luận (Nếu ESSAY)",
-					"Đáp án 1 (Nội dung)", "Đáp án 1 (Đúng/Sai: TRUE/FALSE)",
-					"Đáp án 2 (Nội dung)", "Đáp án 2 (Đúng/Sai: TRUE/FALSE)",
-					"Đáp án 3 (Nội dung)", "Đáp án 3 (Đúng/Sai: TRUE/FALSE)",
-					"Đáp án 4 (Nội dung)", "Đáp án 4 (Đúng/Sai: TRUE/FALSE)"
+					"Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D", "Đáp án đúng (Ví dụ: A hoặc A, B)"
 			};
 
 			CellStyle headerStyle = workbook.createCellStyle();
@@ -357,8 +364,7 @@ public class QuestionServiceImpl implements QuestionService {
 			row1.setHeightInPoints(45);
 			Object[] row1Data = {
 					1, 1, "Thủ đô của Việt Nam là gì?", "PLAIN_TEXT", "hanoi_map.jpg", "MCQ", "EASY", 
-					"Hà Nội là thủ đô của Việt Nam.", "", "Hà Nội", "TRUE", "Hồ Chí Minh", "FALSE", 
-					"Đà Nẵng", "FALSE", "Cần Thơ", "FALSE"
+					"Hà Nội là thủ đô của Việt Nam.", "", "Hà Nội", "Hồ Chí Minh", "Đà Nẵng", "Cần Thơ", "A"
 			};
 			for (int i = 0; i < row1Data.length; i++) {
 				Cell cell = row1.createCell(i);
@@ -372,7 +378,7 @@ public class QuestionServiceImpl implements QuestionService {
 			row2.setHeightInPoints(45);
 			Object[] row2Data = {
 					2, 1, "Hãy phân tích nhân vật Chí Phèo.", "PLAIN_TEXT", "", "ESSAY", "HARD", 
-					"", "Chí Phèo là một kiệt tác của Nam Cao..."
+					"", "Chí Phèo là một kiệt tác của Nam Cao...", "", "", "", "", ""
 			};
 			for (int i = 0; i < row2Data.length; i++) {
 				Cell cell = row2.createCell(i);
@@ -386,8 +392,8 @@ public class QuestionServiceImpl implements QuestionService {
 			row3.setHeightInPoints(45);
 			Object[] row3Data = {
 					3, 1, "Tính đạo hàm của hàm số \\( f(x) = x^2 + 3x + 1 \\).", "LATEX", "", "MCQ", "MEDIUM", 
-					"Dùng quy tắc cơ bản.", "", "\\( f'(x) = 2x + 3 \\)", "TRUE", "\\( f'(x) = 2x - 3 \\)", "FALSE", 
-					"\\( x^2 + 3 \\)", "FALSE", "\\( 2x + 1 \\)", "FALSE"
+					"Dùng quy tắc cơ bản.", "", "\\( f'(x) = 2x + 3 \\)", "\\( f'(x) = 2x - 3 \\)", 
+					"\\( x^2 + 3 \\)", "\\( 2x + 1 \\)", "A"
 			};
 			for (int i = 0; i < row3Data.length; i++) {
 				Cell cell = row3.createCell(i);

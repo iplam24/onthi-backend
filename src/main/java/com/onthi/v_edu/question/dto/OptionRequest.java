@@ -8,10 +8,10 @@ import lombok.Setter;
 @Getter
 @Setter
 public class OptionRequest {
-	@NotBlank
+	@NotBlank(message = "Nội dung đáp án không được để trống")
 	private String content;
 
-	@NotNull
+	@NotNull(message = "Vui lòng chỉ định đáp án này là đúng hay sai")
 	private Boolean isCorrect;
 }
 
