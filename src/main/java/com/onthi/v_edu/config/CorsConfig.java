@@ -17,8 +17,8 @@ public class CorsConfig {
 
         // Liệt kê chính xác các domain frontend của bạn
         config.setAllowedOriginPatterns(java.util.List.of(
-                "https://vuxuanlam.me",
-                "https://admin.vuxuanlam.me",
+                "https://hoc24h.tech",
+                "https://admin.hoc24h.tech",
                 "https://onthi.vuxuanlam.me",
                 "https://tinnhan.vuxuanlam.me",
                 "http://localhost:*"
