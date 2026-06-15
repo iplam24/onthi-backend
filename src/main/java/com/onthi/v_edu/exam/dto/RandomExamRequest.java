@@ -62,6 +62,12 @@ public class RandomExamRequest {
     /** Tiêu đề tùy chỉnh. null = auto generate */
     private String title;
 
+    /** Tỷ lệ phần trăm trùng lặp tối đa với các đề AUTO cũ (0 - 100). null = không giới hạn */
+    private Integer maxDuplicatePercentage;
+
+    /** Có bao gồm các câu hỏi thuộc đoạn văn (Question Group) không. Default: false */
+    private Boolean includeQuestionGroups;
+
     @Getter
     @Setter
     @NoArgsConstructor

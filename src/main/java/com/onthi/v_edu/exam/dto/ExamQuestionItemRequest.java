@@ -9,8 +9,9 @@ import lombok.Setter;
 @Setter
 public class ExamQuestionItemRequest {
 
-    @NotNull
     private Integer questionId;
+
+    private Integer groupId;
 
     private Integer orderIndex;
 

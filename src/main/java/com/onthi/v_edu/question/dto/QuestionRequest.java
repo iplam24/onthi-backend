@@ -14,6 +14,8 @@ import java.util.List;
 @Getter
 @Setter
 public class QuestionRequest {
+	private Integer id;
+
 	@NotBlank(message = "Nội dung câu hỏi không được để trống")
 	private String content;
 

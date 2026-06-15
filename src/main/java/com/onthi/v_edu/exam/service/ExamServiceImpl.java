@@ -155,7 +155,7 @@ public class ExamServiceImpl implements ExamService {
 		exam.setCreatedAt(LocalDateTime.now());
 		exam = examRepository.save(exam);
 
-		syncExamQuestions(exam, request.getQuestions());
+		syncExamQuestions(exam, request.getSections());
 		return new ApiResponse<>(HttpStatus.CREATED.value(), "Tạo đề thi thành công!", toExamResponse(exam));
 	}
 
@@ -180,7 +180,7 @@ public class ExamServiceImpl implements ExamService {
 		exam.setUpdatedAt(LocalDateTime.now());
 		exam = examRepository.save(exam);
 
-		syncExamQuestions(exam, request.getQuestions());
+		syncExamQuestions(exam, request.getSections());
 		return new ApiResponse<>(HttpStatus.OK.value(), "Cập nhật đề thi thành công!", toExamResponse(exam));
 	}
 
@@ -205,28 +205,35 @@ public class ExamServiceImpl implements ExamService {
 			return "Thời gian kết thúc phải sau thời gian bắt đầu!";
 		}
 
-		List<ExamQuestionItemRequest> questionItems = request.getQuestions() == null
+		List<com.onthi.v_edu.exam.dto.ExamSectionRequest> sections = request.getSections() == null
 				? Collections.emptyList()
-				: request.getQuestions();
+				: request.getSections();
 		Set<Integer> uniqueIds = new HashSet<>();
-		for (ExamQuestionItemRequest item : questionItems) {
-			Integer questionId = item.getQuestionId();
-			if (questionId == null) {
-				return "Danh sách câu hỏi có phần tử thiếu questionId!";
-			}
-			if (!uniqueIds.add(questionId)) {
-				return "Danh sách câu hỏi bị trùng questionId!";
-			}
-			Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId).orElse(null);
-			if (question == null) {
-				return "Không tìm thấy question với id=" + questionId;
-			}
+		for (com.onthi.v_edu.exam.dto.ExamSectionRequest section : sections) {
+			if (section.getItems() != null) {
+				for (ExamQuestionItemRequest item : section.getItems()) {
+					if (item.getGroupId() != null) {
+						continue;
+					}
+					Integer questionId = item.getQuestionId();
+					if (questionId == null) {
+						return "Danh sách câu hỏi có phần tử thiếu questionId và groupId!";
+					}
+					if (!uniqueIds.add(questionId)) {
+						return "Danh sách câu hỏi bị trùng questionId=" + questionId;
+					}
+					Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId).orElse(null);
+					if (question == null) {
+						return "Không tìm thấy question với id=" + questionId;
+					}
 
-			Integer questionSubjectId = question.getTopic() != null && question.getTopic().getSubject() != null
-					? question.getTopic().getSubject().getId()
-					: null;
-			if (!subjectId.equals(questionSubjectId)) {
-				return "Question id=" + questionId + " không thuộc môn học của đề thi";
+					Integer questionSubjectId = question.getTopic() != null && question.getTopic().getSubject() != null
+							? question.getTopic().getSubject().getId()
+							: null;
+					if (!subjectId.equals(questionSubjectId)) {
+						return "Question id=" + questionId + " không thuộc môn học của đề thi";
+					}
+				}
 			}
 		}
 		return null;
@@ -248,31 +255,51 @@ public class ExamServiceImpl implements ExamService {
 		exam.setMaxAttempts(request.getMaxAttempts());
 	}
 
-	private void syncExamQuestions(Exam exam, List<ExamQuestionItemRequest> items) {
+	private void syncExamQuestions(Exam exam, List<com.onthi.v_edu.exam.dto.ExamSectionRequest> sections) {
 		Integer examId = exam.getId();
 		examQuestionRepository.softDeleteByExamId(examId);
-		if (items == null || items.isEmpty()) {
+		if (sections == null || sections.isEmpty()) {
 			return;
 		}
 
-		List<ExamQuestion> examQuestions = items.stream()
-				.map(item -> buildExamQuestion(exam, item))
-				.toList();
+		List<ExamQuestion> examQuestions = new java.util.ArrayList<>();
+		int globalOrderIndex = 1;
+		
+		for (com.onthi.v_edu.exam.dto.ExamSectionRequest section : sections) {
+			if (section.getItems() == null) continue;
+			for (ExamQuestionItemRequest item : section.getItems()) {
+				if (item.getGroupId() != null) {
+					List<Question> groupQuestions = questionRepository.findByQuestionGroup_IdAndDeletedAtIsNull(item.getGroupId());
+					for (Question question : groupQuestions) {
+						ExamQuestion examQuestion = new ExamQuestion();
+						examQuestion.setId(new ExamQuestionId(exam.getId(), question.getId()));
+						examQuestion.setExam(exam);
+						examQuestion.setQuestion(question);
+						examQuestion.setOrderIndex(globalOrderIndex++);
+						examQuestion.setScore(item.getScore() != null ? item.getScore() : 1.0);
+						examQuestion.setSectionName(section.getSectionName());
+						examQuestion.setContentSnapshot(normalize(question.getContent()));
+						examQuestion.setContentFormatSnapshot(question.getContentFormat());
+						examQuestions.add(examQuestion);
+					}
+				} else if (item.getQuestionId() != null) {
+					Question question = questionRepository.findByIdAndDeletedAtIsNull(item.getQuestionId()).orElse(null);
+					if (question != null) {
+						ExamQuestion examQuestion = new ExamQuestion();
+						examQuestion.setId(new ExamQuestionId(exam.getId(), question.getId()));
+						examQuestion.setExam(exam);
+						examQuestion.setQuestion(question);
+						examQuestion.setOrderIndex(globalOrderIndex++);
+						examQuestion.setScore(item.getScore());
+						examQuestion.setSectionName(section.getSectionName());
+						examQuestion.setContentSnapshot(normalize(item.getContentSnapshot() != null ? item.getContentSnapshot() : question.getContent()));
+						examQuestion.setContentFormatSnapshot(item.getContentFormatSnapshot() != null ? item.getContentFormatSnapshot() : question.getContentFormat());
+						examQuestions.add(examQuestion);
+					}
+				}
+			}
+		}
 		examQuestionRepository.saveAll(examQuestions);
-	}
-
-	private ExamQuestion buildExamQuestion(Exam exam, ExamQuestionItemRequest item) {
-		Question question = questionRepository.findByIdAndDeletedAtIsNull(item.getQuestionId()).orElseThrow();
-
-		ExamQuestion examQuestion = new ExamQuestion();
-		examQuestion.setId(new ExamQuestionId(exam.getId(), question.getId()));
-		examQuestion.setExam(exam);
-		examQuestion.setQuestion(question);
-		examQuestion.setOrderIndex(item.getOrderIndex());
-		examQuestion.setScore(item.getScore());
-		examQuestion.setContentSnapshot(normalize(item.getContentSnapshot()));
-		examQuestion.setContentFormatSnapshot(item.getContentFormatSnapshot() != null ? item.getContentFormatSnapshot() : question.getContentFormat());
-		return examQuestion;
 	}
 
 	private ExamResponse toExamResponse(Exam exam) {
@@ -306,8 +333,12 @@ public class ExamServiceImpl implements ExamService {
 							question.getUrl(), // Added
 							item.getOrderIndex(),
 							item.getScore(),
+							item.getSectionName(),
 							item.getContentSnapshot(),
 							item.getContentFormatSnapshot() != null ? item.getContentFormatSnapshot() : question.getContentFormat(),
+							question.getQuestionGroup() != null ? question.getQuestionGroup().getId() : null,
+							question.getQuestionGroup() != null ? question.getQuestionGroup().getTitle() : null,
+							question.getQuestionGroup() != null ? question.getQuestionGroup().getContent() : null,
 							options
 					);
 				})
@@ -349,108 +380,41 @@ public class ExamServiceImpl implements ExamService {
 			return Collections.emptyList();
 		}
 	
-		// Group questions by their type (MCQ, ESSAY, etc.)
-		Map<QuestionType, List<ExamQuestionItemResponse>> groupedByType = questionItems.stream()
-				.collect(Collectors.groupingBy(item -> {
-					QuestionType type = item.getQuestionType();
-					return type == null ? QuestionType.MCQ : type;
-				}));
+		Map<String, List<ExamQuestionItemResponse>> groupedBySection = new java.util.LinkedHashMap<>();
+		for (ExamQuestionItemResponse item : questionItems) {
+			String sectionName = item.getSectionName() != null ? item.getSectionName() : "Mặc định";
+			groupedBySection.computeIfAbsent(sectionName, k -> new java.util.ArrayList<>()).add(item);
+		}
 	
-		List<ExamSectionResponse> sections = new ArrayList<>();
+		List<ExamSectionResponse> sections = new java.util.ArrayList<>();
 		int sectionIndex = 0;
 	
-		// Define the order of sections explicitly: MCQ first, then ESSAY
-		List<QuestionType> sectionOrder = List.of(QuestionType.MCQ, QuestionType.ESSAY);
-	
-		for (QuestionType type : sectionOrder) {
-			if (groupedByType.containsKey(type)) {
-				List<ExamQuestionItemResponse> questionsForSection = groupedByType.get(type);
-				if (questionsForSection.isEmpty()) {
-					continue;
-				}
-	
-				// Sort questions within the section by their original orderIndex
-				questionsForSection.sort(Comparator.comparingInt(item -> item.getOrderIndex() == null ? Integer.MAX_VALUE : item.getOrderIndex()));
-	
-				int startOrder = questionsForSection.get(0).getOrderIndex() != null ? questionsForSection.get(0).getOrderIndex() : 0;
-				int endOrder = questionsForSection.get(questionsForSection.size() - 1).getOrderIndex() != null ? questionsForSection.get(questionsForSection.size() - 1).getOrderIndex() : 0;
-				double totalScore = questionsForSection.stream().mapToDouble(q -> q.getScore() == null ? 0 : q.getScore()).sum();
-	
-				sections.add(buildSection(
-						++sectionIndex,
-						type,
-						questionsForSection,
-						startOrder,
-						endOrder,
-						totalScore
-				));
+		for (Map.Entry<String, List<ExamQuestionItemResponse>> entry : groupedBySection.entrySet()) {
+			String sectionName = entry.getKey();
+			List<ExamQuestionItemResponse> questionsForSection = entry.getValue();
+			if (questionsForSection.isEmpty()) {
+				continue;
 			}
-		}
+			
+			questionsForSection.sort(Comparator.comparingInt(item -> item.getOrderIndex() == null ? Integer.MAX_VALUE : item.getOrderIndex()));
+			int startOrder = questionsForSection.get(0).getOrderIndex() != null ? questionsForSection.get(0).getOrderIndex() : 0;
+			int endOrder = questionsForSection.get(questionsForSection.size() - 1).getOrderIndex() != null ? questionsForSection.get(questionsForSection.size() - 1).getOrderIndex() : 0;
+			double totalScore = questionsForSection.stream().mapToDouble(q -> q.getScore() == null ? 0 : q.getScore()).sum();
 	
-		// Add any other question types that might exist but are not in the predefined order
-		for (Map.Entry<QuestionType, List<ExamQuestionItemResponse>> entry : groupedByType.entrySet()) {
-			if (!sectionOrder.contains(entry.getKey())) {
-				List<ExamQuestionItemResponse> questionsForSection = entry.getValue();
-				if (questionsForSection.isEmpty()) {
-					continue;
-				}
-				questionsForSection.sort(Comparator.comparingInt(item -> item.getOrderIndex() == null ? Integer.MAX_VALUE : item.getOrderIndex()));
-				int startOrder = questionsForSection.get(0).getOrderIndex() != null ? questionsForSection.get(0).getOrderIndex() : 0;
-				int endOrder = questionsForSection.get(questionsForSection.size() - 1).getOrderIndex() != null ? questionsForSection.get(questionsForSection.size() - 1).getOrderIndex() : 0;
-				double totalScore = questionsForSection.stream().mapToDouble(q -> q.getScore() == null ? 0 : q.getScore()).sum();
-	
-				sections.add(buildSection(
-						++sectionIndex,
-						entry.getKey(),
-						questionsForSection,
-						startOrder,
-						endOrder,
-						totalScore
-				));
-			}
+			sections.add(new ExamSectionResponse(
+					++sectionIndex,
+					sectionName,
+					"MIXED",
+					questionsForSection.size(),
+					totalScore,
+					startOrder,
+					endOrder,
+					List.copyOf(questionsForSection)
+			));
 		}
-
 		return sections;
 	}
 
-	private ExamSectionResponse buildSection(int sectionIndex,
-	                                       QuestionType sectionType,
-	                                       List<ExamQuestionItemResponse> questions,
-	                                       int startOrderIndex,
-	                                       int endOrderIndex,
-	                                       double totalScore) {
-		String title = buildSectionTitle(sectionIndex, sectionType);
-		String type = sectionType == null ? "MIXED" : sectionType.name();
-		return new ExamSectionResponse(
-				sectionIndex,
-				title,
-				type,
-				questions.size(),
-				totalScore,
-				startOrderIndex,
-				endOrderIndex,
-				List.copyOf(questions)
-		);
-	}
-
-	private String buildSectionTitle(int sectionIndex, QuestionType type) {
-		String prefix = switch (sectionIndex) {
-			case 1 -> "Phần 1";
-			case 2 -> "Phần 2";
-			case 3 -> "Phần 3";
-			case 4 -> "Phần 4";
-			case 5 -> "Phần 5";
-			case 6 -> "Phần 6";
-			default -> "Phần " + sectionIndex;
-		};
-
-		String suffix = switch (type == null ? QuestionType.MCQ : type) {
-			case ESSAY -> " - Tự luận";
-			case MCQ -> " - Trắc nghiệm";
-			default -> "";
-		};
-		return prefix + suffix;
-	}
 
 	private String resolveUiLayoutHint(String subjectName, List<ExamQuestionItemResponse> questions) {
 		String normalizedSubject = subjectName == null ? "" : subjectName.trim().toLowerCase(Locale.ROOT);
@@ -545,63 +509,148 @@ public class ExamServiceImpl implements ExamService {
 			}
 		}
 
-		// Build exclude list for duplicate avoidance
-		boolean avoidDuplicates = !Boolean.FALSE.equals(request.getAvoidDuplicates());
-		List<Integer> excludeIds = new ArrayList<>();
-		if (avoidDuplicates) {
-			List<Integer> usedIds = examQuestionRepository.findUsedQuestionIdsByUserId(currentUser.getId());
-			if (usedIds != null && !usedIds.isEmpty()) {
-				excludeIds.addAll(usedIds);
-			}
-		}
-		if (excludeIds.isEmpty()) {
-			excludeIds.add(-1); // placeholder to avoid empty IN clause
-		}
-
-		// Select questions
-		List<Question> selectedQuestions;
 		boolean hasDuplicates = false;
+		boolean includeGroups = Boolean.TRUE.equals(request.getIncludeQuestionGroups());
 
-		if (request.getTopicDetailedConfigs() != null && !request.getTopicDetailedConfigs().isEmpty()) {
-			selectedQuestions = selectByTopicDetailed(request, excludeIds);
-		} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()
-				&& request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
-			// Both topic and difficulty specified → distribute proportionally
-			selectedQuestions = selectByTopicAndDifficulty(request, excludeIds);
-		} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()) {
-			// Only topic specified
-			selectedQuestions = selectByTopicOnly(request, excludeIds);
-		} else if (request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
-			// Only difficulty specified → from entire subject
-			selectedQuestions = selectByDifficultyOnly(request, excludeIds);
-		} else {
-			// No config → random from subject
-			selectedQuestions = questionRepository.findRandomBySubject(
-					request.getSubjectId(), excludeIds, PageRequest.of(0, request.getTotalQuestions()));
-		}
+		int maxRetries = 10;
+		int retries = 0;
+		boolean success = false;
+		List<Question> finalQuestions = new ArrayList<>();
+		String finalHash = null;
+		Map<Integer, Double> finalOverlapPercentages = new LinkedHashMap<>();
 
-		// Fallback: if not enough questions, retry without exclusion
-		if (selectedQuestions.size() < request.getTotalQuestions() && avoidDuplicates) {
-			hasDuplicates = true;
-			List<Integer> fallbackExclude = List.of(-1);
+		while (retries < maxRetries && !success) {
+			retries++;
+			
+			// Build exclude list for duplicate avoidance
+			boolean avoidDuplicates = !Boolean.FALSE.equals(request.getAvoidDuplicates());
+			List<Integer> excludeIds = new ArrayList<>();
+			if (avoidDuplicates) {
+				List<Integer> usedIds = examQuestionRepository.findUsedQuestionIdsByUserId(currentUser.getId());
+				if (usedIds != null && !usedIds.isEmpty()) {
+					excludeIds.addAll(usedIds);
+				}
+			}
+			if (excludeIds.isEmpty()) {
+				excludeIds.add(-1); // placeholder to avoid empty IN clause
+			}
+
+			// Select questions
+			List<Question> selectedQuestions;
+
 			if (request.getTopicDetailedConfigs() != null && !request.getTopicDetailedConfigs().isEmpty()) {
-				selectedQuestions = selectByTopicDetailed(request, fallbackExclude);
+				selectedQuestions = selectByTopicDetailed(request, excludeIds, includeGroups);
 			} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()
 					&& request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
-				selectedQuestions = selectByTopicAndDifficulty(request, fallbackExclude);
+				selectedQuestions = selectByTopicAndDifficulty(request, excludeIds, includeGroups);
 			} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()) {
-				selectedQuestions = selectByTopicOnly(request, fallbackExclude);
+				selectedQuestions = selectByTopicOnly(request, excludeIds, includeGroups);
 			} else if (request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
-				selectedQuestions = selectByDifficultyOnly(request, fallbackExclude);
+				selectedQuestions = selectByDifficultyOnly(request, excludeIds, includeGroups);
 			} else {
 				selectedQuestions = questionRepository.findRandomBySubject(
-						request.getSubjectId(), fallbackExclude, PageRequest.of(0, request.getTotalQuestions()));
+						request.getSubjectId(), excludeIds, includeGroups, PageRequest.of(0, request.getTotalQuestions()));
 			}
+
+			// Fallback: if not enough questions, retry without exclusion
+			if (selectedQuestions.size() < request.getTotalQuestions() && avoidDuplicates) {
+				hasDuplicates = true;
+				List<Integer> fallbackExclude = List.of(-1);
+				if (request.getTopicDetailedConfigs() != null && !request.getTopicDetailedConfigs().isEmpty()) {
+					selectedQuestions = selectByTopicDetailed(request, fallbackExclude, includeGroups);
+				} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()
+						&& request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+					selectedQuestions = selectByTopicAndDifficulty(request, fallbackExclude, includeGroups);
+				} else if (request.getTopicConfigs() != null && !request.getTopicConfigs().isEmpty()) {
+					selectedQuestions = selectByTopicOnly(request, fallbackExclude, includeGroups);
+				} else if (request.getDifficultyConfigs() != null && !request.getDifficultyConfigs().isEmpty()) {
+					selectedQuestions = selectByDifficultyOnly(request, fallbackExclude, includeGroups);
+				} else {
+					selectedQuestions = questionRepository.findRandomBySubject(
+							request.getSubjectId(), fallbackExclude, includeGroups, PageRequest.of(0, request.getTotalQuestions()));
+				}
+			}
+
+			if (selectedQuestions.isEmpty()) {
+				break;
+			}
+
+			// EXPAND GROUPS
+			if (includeGroups) {
+				List<Question> expanded = new ArrayList<>();
+				java.util.Set<Integer> addedGroupIds = new java.util.HashSet<>();
+				java.util.Set<Integer> addedQuestionIds = new java.util.HashSet<>();
+
+				for (Question q : selectedQuestions) {
+					if (q.getQuestionGroup() != null) {
+						Integer groupId = q.getQuestionGroup().getId();
+						if (!addedGroupIds.contains(groupId)) {
+							List<Question> groupQ = questionRepository.findByQuestionGroup_IdAndDeletedAtIsNull(groupId);
+							for (Question gq : groupQ) {
+								if (!addedQuestionIds.contains(gq.getId())) {
+									expanded.add(gq);
+									addedQuestionIds.add(gq.getId());
+								}
+							}
+							addedGroupIds.add(groupId);
+						}
+					} else {
+						if (!addedQuestionIds.contains(q.getId())) {
+							expanded.add(q);
+							addedQuestionIds.add(q.getId());
+						}
+					}
+				}
+				selectedQuestions = expanded;
+			}
+
+			// HASH & OVERLAP CHECK
+			List<Integer> qIds = selectedQuestions.stream().map(Question::getId).sorted().toList();
+			String fingerprint = qIds.stream().map(String::valueOf).collect(Collectors.joining("-"));
+			String hash = org.springframework.util.DigestUtils.md5DigestAsHex(fingerprint.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			
+			// 100% Match check
+			if (examRepository.existsByCreatedBy_IdAndExamHashAndDeletedAtIsNull(currentUser.getId(), hash)) {
+				continue; // Try again
+			}
+
+			// Percentage check
+			Map<Integer, Double> overlapPercentages = new LinkedHashMap<>();
+			List<Exam> recentExams = examRepository.findRecentAutoExamsByUserAndSubject(currentUser.getId(), subject.getId(), PageRequest.of(0, 20));
+			boolean overlapTooHigh = false;
+			for (Exam oldExam : recentExams) {
+				List<Integer> oldIds = examQuestionRepository.findByExam_IdAndDeletedAtIsNullOrderByOrderIndexAscQuestion_IdAsc(oldExam.getId())
+						.stream().map(eq -> eq.getQuestion().getId()).toList();
+				java.util.Set<Integer> common = new java.util.HashSet<>(qIds);
+				common.retainAll(oldIds);
+				double percent = common.size() * 100.0 / qIds.size();
+				overlapPercentages.put(oldExam.getId(), percent);
+				
+				if (request.getMaxDuplicatePercentage() != null && request.getMaxDuplicatePercentage() >= 0 && request.getMaxDuplicatePercentage() < 100) {
+					if (percent > request.getMaxDuplicatePercentage()) {
+						overlapTooHigh = true;
+						break;
+					}
+				}
+			}
+			if (overlapTooHigh) {
+				continue; // Try again
+			}
+
+			finalQuestions = selectedQuestions;
+			finalHash = hash;
+			finalOverlapPercentages = overlapPercentages;
+			success = true;
 		}
 
-		if (selectedQuestions.isEmpty()) {
-			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không đủ câu hỏi trong ngân hàng đề để tạo đề thi!");
+		if (!success) {
+			if (finalQuestions.isEmpty()) {
+				return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không đủ câu hỏi trong ngân hàng đề để tạo đề thi!");
+			}
+			return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Không thể tạo đề thi đáp ứng yêu cầu % trùng lặp. Vui lòng thử tăng % trùng lặp hoặc thêm câu hỏi vào ngân hàng.");
 		}
+
+		List<Question> selectedQuestions = finalQuestions;
 
 		// Create Exam entity
 		String title = isBlank(request.getTitle())
@@ -621,6 +670,7 @@ public class ExamServiceImpl implements ExamService {
 		exam.setShuffleAnswers(true);
 		exam.setMaxAttempts(request.getMaxAttempts());
 		exam.setCreatedAt(LocalDateTime.now());
+		exam.setExamHash(finalHash);
 		exam = examRepository.save(exam);
 
 		// Create ExamQuestion entries
@@ -657,7 +707,8 @@ public class ExamServiceImpl implements ExamService {
 				!Boolean.FALSE.equals(request.getAllowRetake()),
 				request.getMaxAttempts(),
 				hasDuplicates,
-				exam.getCreatedAt()
+				exam.getCreatedAt(),
+				finalOverlapPercentages
 		);
 
 		String msg = hasDuplicates
@@ -666,7 +717,7 @@ public class ExamServiceImpl implements ExamService {
 		return new ApiResponse<>(HttpStatus.CREATED.value(), msg, response);
 	}
 
-	private List<Question> selectByTopicAndDifficulty(RandomExamRequest request, List<Integer> excludeIds) {
+	private List<Question> selectByTopicAndDifficulty(RandomExamRequest request, List<Integer> excludeIds, boolean includeGroups) {
 		List<Question> result = new ArrayList<>();
 		List<RandomExamRequest.DifficultyConfig> diffs = request.getDifficultyConfigs();
 		int totalDiffCount = diffs.stream().mapToInt(RandomExamRequest.DifficultyConfig::getCount).sum();
@@ -676,34 +727,34 @@ public class ExamServiceImpl implements ExamService {
 				int count = (int) Math.round((double) tc.getCount() * dc.getCount() / totalDiffCount);
 				if (count <= 0) continue;
 				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
-						tc.getTopicId(), dc.getDifficulty(), excludeIds, PageRequest.of(0, count));
+						tc.getTopicId(), dc.getDifficulty(), excludeIds, includeGroups, PageRequest.of(0, count));
 				result.addAll(questions);
 			}
 		}
 		return result;
 	}
 
-	private List<Question> selectByTopicOnly(RandomExamRequest request, List<Integer> excludeIds) {
+	private List<Question> selectByTopicOnly(RandomExamRequest request, List<Integer> excludeIds, boolean includeGroups) {
 		List<Question> result = new ArrayList<>();
 		for (RandomExamRequest.TopicConfig tc : request.getTopicConfigs()) {
 			List<Question> questions = questionRepository.findRandomByTopic(
-					tc.getTopicId(), excludeIds, PageRequest.of(0, tc.getCount()));
+					tc.getTopicId(), excludeIds, includeGroups, PageRequest.of(0, tc.getCount()));
 			result.addAll(questions);
 		}
 		return result;
 	}
 
-	private List<Question> selectByDifficultyOnly(RandomExamRequest request, List<Integer> excludeIds) {
+	private List<Question> selectByDifficultyOnly(RandomExamRequest request, List<Integer> excludeIds, boolean includeGroups) {
 		List<Question> result = new ArrayList<>();
 		for (RandomExamRequest.DifficultyConfig dc : request.getDifficultyConfigs()) {
 			List<Question> questions = questionRepository.findRandomBySubjectAndDifficulty(
-					request.getSubjectId(), dc.getDifficulty(), excludeIds, PageRequest.of(0, dc.getCount()));
+					request.getSubjectId(), dc.getDifficulty(), excludeIds, includeGroups, PageRequest.of(0, dc.getCount()));
 			result.addAll(questions);
 		}
 		return result;
 	}
 
-	private List<Question> selectByTopicDetailed(RandomExamRequest request, List<Integer> excludeIds) {
+	private List<Question> selectByTopicDetailed(RandomExamRequest request, List<Integer> excludeIds, boolean includeGroups) {
 		List<Question> result = new ArrayList<>();
 		for (RandomExamRequest.TopicDetailedConfig tc : request.getTopicDetailedConfigs()) {
 			int easy = tc.getEasyCount() != null ? tc.getEasyCount() : 0;
@@ -712,17 +763,17 @@ public class ExamServiceImpl implements ExamService {
 
 			if (easy > 0) {
 				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
-						tc.getTopicId(), DifficultyLevel.EASY, excludeIds, PageRequest.of(0, easy));
+						tc.getTopicId(), DifficultyLevel.EASY, excludeIds, includeGroups, PageRequest.of(0, easy));
 				result.addAll(questions);
 			}
 			if (medium > 0) {
 				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
-						tc.getTopicId(), DifficultyLevel.MEDIUM, excludeIds, PageRequest.of(0, medium));
+						tc.getTopicId(), DifficultyLevel.MEDIUM, excludeIds, includeGroups, PageRequest.of(0, medium));
 				result.addAll(questions);
 			}
 			if (hard > 0) {
 				List<Question> questions = questionRepository.findRandomByTopicAndDifficulty(
-						tc.getTopicId(), DifficultyLevel.HARD, excludeIds, PageRequest.of(0, hard));
+						tc.getTopicId(), DifficultyLevel.HARD, excludeIds, includeGroups, PageRequest.of(0, hard));
 				result.addAll(questions);
 			}
 		}

@@ -57,4 +57,8 @@ public class Question {
     private LocalDateTime createdAt;
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "question_group_id")
+    private QuestionGroup questionGroup;
 }

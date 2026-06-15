@@ -31,10 +31,15 @@ public class AiTutorService {
                 .map(o -> "- " + o.getContent() + (o.getIsCorrect() ? " (Đúng)" : ""))
                 .collect(Collectors.joining("\n"));
 
+        String groupContext = "";
+        if (question.getQuestionGroup() != null) {
+            groupContext = "ĐOẠN VĂN (NGỮ LIỆU CHUNG):\n" + question.getQuestionGroup().getContent() + "\n\n";
+        }
+
         String prompt = String.format("""
                 Bạn là một gia sư AI tận tâm. Hãy giải thích câu hỏi sau đây cho học sinh.
                 
-                CÂU HỎI:
+                %sCÂU HỎI:
                 %s
                 
                 CÁC LỰA CHỌN (nếu có):
@@ -49,6 +54,7 @@ public class AiTutorService {
                 
                 Hãy trả lời bằng Tiếng Việt, giọng văn khích lệ và dễ hiểu.
                 """,
+                groupContext,
                 question.getContent(),
                 optionsText.isEmpty() ? "Câu hỏi tự luận" : optionsText,
                 studentAnswer != null && !studentAnswer.isEmpty() ? "CÂU TRẢ LỜI CỦA HỌC SINH: " + studentAnswer : ""

@@ -177,10 +177,15 @@ public class AttemptAsyncGradingService {
                     }
                 }
 
+                String questionText = answer.getQuestionSnapshot();
+                if (answer.getQuestion() != null && answer.getQuestion().getQuestionGroup() != null) {
+                    questionText = "[Ngữ cảnh / Đoạn văn: " + answer.getQuestion().getQuestionGroup().getContent() + "]\n\n[Câu hỏi: " + questionText + "]";
+                }
+
                 // Nếu là Tự luận dài (>30 ký tự) mới đưa vào danh sách gửi AI GitHub Models
                 batchItems.add(new GitHubModelsAiGradingService.BatchItem(
                         qId,
-                        answer.getQuestionSnapshot(),
+                        questionText,
                         studentAnswerText,
                         correctAnswerText,
                         maxScore,

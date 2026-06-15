@@ -33,6 +33,9 @@ public class ExamQuestion {
 
     private Double score;
 
+    @Column(name = "section_name")
+    private String sectionName;
+
     @Column(columnDefinition = "TEXT")
     private String contentSnapshot;
 

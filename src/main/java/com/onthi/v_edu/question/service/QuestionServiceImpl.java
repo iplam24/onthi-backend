@@ -19,6 +19,10 @@ import com.onthi.v_edu.question.repository.EssayAnswerRepository;
 import com.onthi.v_edu.question.repository.ExplanationRepository;
 import com.onthi.v_edu.question.repository.QuestionOptionRepository;
 import com.onthi.v_edu.question.repository.QuestionRepository;
+import com.onthi.v_edu.question.repository.QuestionGroupRepository;
+import com.onthi.v_edu.question.entity.QuestionGroup;
+import com.onthi.v_edu.question.dto.QuestionGroupRequest;
+import com.onthi.v_edu.question.dto.QuestionGroupResponse;
 import com.onthi.v_edu.user.entity.User;
 import com.onthi.v_edu.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -60,6 +64,7 @@ public class QuestionServiceImpl implements QuestionService {
 	private final TopicRepository topicRepository;
 	private final UserRepository userRepository;
 	private final FileUpLoadService fileUpLoadService;
+	private final QuestionGroupRepository questionGroupRepository;
 
 	public QuestionServiceImpl(QuestionRepository questionRepository,
 						   QuestionOptionRepository questionOptionRepository,
@@ -67,7 +72,8 @@ public class QuestionServiceImpl implements QuestionService {
 						   ExplanationRepository explanationRepository,
 						   TopicRepository topicRepository,
 						   UserRepository userRepository,
-						   FileUpLoadService fileUpLoadService) {
+						   FileUpLoadService fileUpLoadService,
+						   QuestionGroupRepository questionGroupRepository) {
 		this.questionRepository = questionRepository;
 		this.questionOptionRepository = questionOptionRepository;
 		this.essayAnswerRepository = essayAnswerRepository;
@@ -75,6 +81,7 @@ public class QuestionServiceImpl implements QuestionService {
 		this.topicRepository = topicRepository;
 		this.userRepository = userRepository;
 		this.fileUpLoadService = fileUpLoadService;
+		this.questionGroupRepository = questionGroupRepository;
 	}
 
 	@Override
@@ -82,18 +89,47 @@ public class QuestionServiceImpl implements QuestionService {
 	public ApiResponse<PageResponse<QuestionResponse>> getAllQuestions(Integer subjectId, Integer topicId, Pageable pageable) {
 		Page<Question> questionPage;
 		if (subjectId != null && topicId != null) {
-			questionPage = questionRepository.findByTopic_IdAndTopic_Subject_IdAndDeletedAtIsNull(topicId, subjectId, pageable);
+			questionPage = questionRepository.findByTopic_IdAndTopic_Subject_IdAndQuestionGroupIsNullAndDeletedAtIsNull(topicId, subjectId, pageable);
 		} else if (subjectId != null) {
-			questionPage = questionRepository.findByTopic_Subject_IdAndDeletedAtIsNull(subjectId, pageable);
+			questionPage = questionRepository.findByTopic_Subject_IdAndQuestionGroupIsNullAndDeletedAtIsNull(subjectId, pageable);
 		} else if (topicId != null) {
-			questionPage = questionRepository.findByTopic_IdAndDeletedAtIsNull(topicId, pageable);
+			questionPage = questionRepository.findByTopic_IdAndQuestionGroupIsNullAndDeletedAtIsNull(topicId, pageable);
 		} else {
-			questionPage = questionRepository.findByDeletedAtIsNull(pageable);
+			questionPage = questionRepository.findByQuestionGroupIsNullAndDeletedAtIsNull(pageable);
 		}
 
 		Page<QuestionResponse> data = questionPage
 				.map(this::toQuestionResponse);
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách câu hỏi thành công!", PageResponse.from(data));
+	}
+
+	@Override
+	public ApiResponse<PageResponse<QuestionGroupResponse>> getAllQuestionGroups(Integer subjectId, Integer topicId, Pageable pageable) {
+		Page<QuestionGroup> groupPage;
+		if (topicId != null) {
+			groupPage = questionGroupRepository.findByTopic_Id(topicId, pageable);
+		} else if (subjectId != null) {
+			groupPage = questionGroupRepository.findByTopic_Subject_Id(subjectId, pageable);
+		} else {
+			groupPage = questionGroupRepository.findAll(pageable);
+		}
+
+		Page<QuestionGroupResponse> data = groupPage.map(group -> new QuestionGroupResponse(
+				group.getId(),
+				group.getTitle(),
+				group.getContent(),
+				group.getContentFormat() != null ? group.getContentFormat() : ContentFormat.PLAIN_TEXT,
+				group.getAudioUrl(),
+				questionRepository.findByQuestionGroup_IdAndDeletedAtIsNull(group.getId())
+					.stream().map(this::toQuestionResponse).toList(),
+				group.getTopic() != null ? group.getTopic().getId() : null,
+				group.getTopic() != null ? group.getTopic().getName() : null,
+				group.getCreatedBy() != null ? group.getCreatedBy().getId() : null,
+				group.getCreatedBy() != null ? group.getCreatedBy().getUsername() : null,
+				group.getCreatedAt()
+		));
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy danh sách nhóm câu hỏi thành công!", PageResponse.from(data));
 	}
 
 	@Override
@@ -194,6 +230,180 @@ public class QuestionServiceImpl implements QuestionService {
 		}
 
 		return new ApiResponse<>(HttpStatus.OK.value(), "Lưu " + requests.size() + " câu hỏi thành công!");
+	}
+
+	@Override
+	public ApiResponse<QuestionGroupResponse> createQuestionGroup(QuestionGroupRequest request) {
+		Topic topic = topicRepository.findById(request.getTopicId()).orElse(null);
+		if (topic == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy topic!");
+		}
+
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+		User user = userRepository.findById(userDetails.getId()).orElse(null);
+
+		QuestionGroup group = new QuestionGroup();
+		group.setTitle(request.getTitle());
+		group.setContent(request.getContent());
+		group.setContentFormat(request.getContentFormat() != null ? request.getContentFormat() : ContentFormat.PLAIN_TEXT);
+		group.setAudioUrl(request.getAudioUrl());
+		group.setTopic(topic);
+		group.setCreatedBy(user);
+		
+		group = questionGroupRepository.save(group);
+
+		List<QuestionResponse> childQuestions = new ArrayList<>();
+		if (request.getQuestions() != null && !request.getQuestions().isEmpty()) {
+			for (QuestionRequest qReq : request.getQuestions()) {
+				Question child = new Question();
+				child.setContent(normalize(qReq.getContent()));
+				child.setContentFormat(resolveContentFormat(qReq.getContentFormat()));
+				child.setUrl(normalize(qReq.getUrl()));
+				child.setType(qReq.getType());
+				child.setDifficulty(qReq.getDifficulty());
+				child.setTopic(topic);
+				child.setCreatedBy(user);
+				child.setQuestionGroup(group);
+				
+				child = questionRepository.save(child);
+				syncQuestionDetails(child, qReq);
+				childQuestions.add(toQuestionResponse(child));
+			}
+		}
+
+		QuestionGroupResponse res = new QuestionGroupResponse();
+		res.setId(group.getId());
+		res.setTitle(group.getTitle());
+		res.setContent(group.getContent());
+		res.setContentFormat(group.getContentFormat());
+		res.setAudioUrl(group.getAudioUrl());
+		res.setQuestions(childQuestions);
+
+		return new ApiResponse<>(HttpStatus.CREATED.value(), "Tạo nhóm câu hỏi thành công!", res);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public ApiResponse<QuestionGroupResponse> getQuestionGroupById(Integer id) {
+		QuestionGroup group = questionGroupRepository.findById(id).orElse(null);
+		if (group == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy nhóm câu hỏi!");
+		}
+
+		List<QuestionResponse> childQuestions = questionRepository.findByQuestionGroup_IdAndDeletedAtIsNull(group.getId())
+				.stream().map(this::toQuestionResponse).toList();
+
+		QuestionGroupResponse res = new QuestionGroupResponse(
+				group.getId(),
+				group.getTitle(),
+				group.getContent(),
+				group.getContentFormat() != null ? group.getContentFormat() : ContentFormat.PLAIN_TEXT,
+				group.getAudioUrl(),
+				childQuestions,
+				group.getTopic() != null ? group.getTopic().getId() : null,
+				group.getTopic() != null ? group.getTopic().getName() : null,
+				group.getCreatedBy() != null ? group.getCreatedBy().getId() : null,
+				group.getCreatedBy() != null ? group.getCreatedBy().getUsername() : null,
+				group.getCreatedAt()
+		);
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Lấy nhóm câu hỏi thành công!", res);
+	}
+
+	@Override
+	public ApiResponse<QuestionGroupResponse> updateQuestionGroup(Integer id, QuestionGroupRequest request) {
+		QuestionGroup group = questionGroupRepository.findById(id).orElse(null);
+		if (group == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy nhóm câu hỏi!");
+		}
+
+		Topic topic = topicRepository.findById(request.getTopicId()).orElse(null);
+		if (topic == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy topic!");
+		}
+
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+		User user = userRepository.findById(userDetails.getId()).orElse(null);
+
+		group.setTitle(request.getTitle());
+		group.setContent(request.getContent());
+		group.setContentFormat(request.getContentFormat() != null ? request.getContentFormat() : ContentFormat.PLAIN_TEXT);
+		group.setAudioUrl(request.getAudioUrl());
+		group.setTopic(topic);
+		group = questionGroupRepository.save(group);
+
+		// Handle child questions
+		List<Question> existingChildren = questionRepository.findByQuestionGroup_IdAndDeletedAtIsNull(group.getId());
+		
+		// If request has questions, we sync them. (For simplicity, we delete missing and add/update existing)
+		List<Integer> requestQuestionIds = new ArrayList<>();
+		List<QuestionResponse> childResponses = new ArrayList<>();
+		
+		if (request.getQuestions() != null) {
+			for (QuestionRequest qReq : request.getQuestions()) {
+				Question child;
+				if (qReq.getId() != null) {
+					child = questionRepository.findByIdAndDeletedAtIsNull(qReq.getId()).orElse(new Question());
+					requestQuestionIds.add(qReq.getId());
+				} else {
+					child = new Question();
+				}
+				
+				child.setContent(normalize(qReq.getContent()));
+				child.setContentFormat(resolveContentFormat(qReq.getContentFormat()));
+				child.setUrl(normalize(qReq.getUrl()));
+				child.setType(qReq.getType());
+				child.setDifficulty(qReq.getDifficulty());
+				child.setTopic(topic);
+				child.setCreatedBy(user);
+				child.setQuestionGroup(group);
+				
+				child = questionRepository.save(child);
+				syncQuestionDetails(child, qReq);
+				childResponses.add(toQuestionResponse(child));
+			}
+		}
+
+		// Delete questions that are not in the new request
+		for (Question oldChild : existingChildren) {
+			if (!requestQuestionIds.contains(oldChild.getId())) {
+				deleteQuestion(oldChild.getId());
+			}
+		}
+
+		QuestionGroupResponse res = new QuestionGroupResponse(
+				group.getId(),
+				group.getTitle(),
+				group.getContent(),
+				group.getContentFormat() != null ? group.getContentFormat() : ContentFormat.PLAIN_TEXT,
+				group.getAudioUrl(),
+				childResponses,
+				group.getTopic() != null ? group.getTopic().getId() : null,
+				group.getTopic() != null ? group.getTopic().getName() : null,
+				group.getCreatedBy() != null ? group.getCreatedBy().getId() : null,
+				group.getCreatedBy() != null ? group.getCreatedBy().getUsername() : null,
+				group.getCreatedAt()
+		);
+
+		return new ApiResponse<>(HttpStatus.OK.value(), "Cập nhật nhóm câu hỏi thành công!", res);
+	}
+
+	@Override
+	public ApiResponse<Void> deleteQuestionGroup(Integer id) {
+		QuestionGroup group = questionGroupRepository.findById(id).orElse(null);
+		if (group == null) {
+			return new ApiResponse<>(HttpStatus.NOT_FOUND.value(), "Không tìm thấy nhóm câu hỏi!");
+		}
+
+		List<Question> existingChildren = questionRepository.findByQuestionGroup_IdAndDeletedAtIsNull(group.getId());
+		for (Question child : existingChildren) {
+			deleteQuestion(child.getId());
+		}
+
+		questionGroupRepository.delete(group);
+		return new ApiResponse<>(HttpStatus.OK.value(), "Xoá nhóm câu hỏi thành công!");
 	}
 
 	@Override
@@ -604,7 +814,8 @@ public class QuestionServiceImpl implements QuestionService {
 				options,
 				essayAnswer != null ? essayAnswer.getSampleAnswer() : null,
 				explanation != null ? explanation.getContent() : null,
-				explanation != null ? explanation.getCreatedAt() : null
+				explanation != null ? explanation.getCreatedAt() : null,
+				question.getQuestionGroup() != null ? question.getQuestionGroup().getId() : null
 		);
 	}
 

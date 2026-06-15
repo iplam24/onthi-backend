@@ -47,5 +47,5 @@ public class ExamRequest {
     @Min(value = 0, message = "Số lần làm bài tối đa không được âm")
     private Integer maxAttempts;
 
-    private List<@Valid ExamQuestionItemRequest> questions;
+    private List<@Valid ExamSectionRequest> sections;
 }

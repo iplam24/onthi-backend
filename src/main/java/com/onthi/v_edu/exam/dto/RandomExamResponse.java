@@ -31,4 +31,7 @@ public class RandomExamResponse {
     private Integer maxAttempts;
     private Boolean hasDuplicates;
     private LocalDateTime createdAt;
+    
+    /** Phân trăm trùng lặp với các đề cũ. Key = Exam ID, Value = % */
+    private Map<Integer, Double> overlapPercentages;
 }

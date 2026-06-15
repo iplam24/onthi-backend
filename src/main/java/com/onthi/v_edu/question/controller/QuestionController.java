@@ -44,6 +44,15 @@ public class QuestionController {
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 
+	@GetMapping("/groups")
+	public ResponseEntity<ApiResponse<?>> getAllQuestionGroups(
+			@RequestParam(required = false) Integer subjectId,
+			@RequestParam(required = false) Integer topicId,
+			@ParameterObject @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+		ApiResponse<?> response = questionService.getAllQuestionGroups(subjectId, topicId, pageable);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
 	@GetMapping("/{id}")
 	public ResponseEntity<ApiResponse<?>> getQuestionById(@PathVariable Integer id) {
 		ApiResponse<?> response = questionService.getQuestionById(id);
@@ -61,6 +70,34 @@ public class QuestionController {
 	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<ApiResponse<?>> createBatchQuestions(@RequestBody List<QuestionRequest> requests) {
 		ApiResponse<?> response = questionService.createQuestions(requests);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@PostMapping("/group")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<ApiResponse<?>> createQuestionGroup(@Valid @RequestBody com.onthi.v_edu.question.dto.QuestionGroupRequest request) {
+		ApiResponse<?> response = questionService.createQuestionGroup(request);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@GetMapping("/group/{id}")
+	public ResponseEntity<ApiResponse<?>> getQuestionGroupById(@PathVariable Integer id) {
+		ApiResponse<?> response = questionService.getQuestionGroupById(id);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@PutMapping("/group/{id}")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<ApiResponse<?>> updateQuestionGroup(@PathVariable Integer id,
+			@Valid @RequestBody com.onthi.v_edu.question.dto.QuestionGroupRequest request) {
+		ApiResponse<?> response = questionService.updateQuestionGroup(id, request);
+		return ResponseEntity.status(response.getStatus()).body(response);
+	}
+
+	@DeleteMapping("/group/{id}")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<ApiResponse<?>> deleteQuestionGroup(@PathVariable Integer id) {
+		ApiResponse<?> response = questionService.deleteQuestionGroup(id);
 		return ResponseEntity.status(response.getStatus()).body(response);
 	}
 

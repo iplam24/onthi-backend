@@ -62,4 +62,7 @@ public class Exam {
     private LocalDateTime updatedAt;
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @Column(name = "exam_hash", length = 32)
+    private String examHash;
 }

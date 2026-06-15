@@ -29,9 +29,17 @@ public class ExamQuestionItemResponse {
 
     private Double score;
 
+    private String sectionName;
+
     private String contentSnapshot;
 
     private ContentFormat contentFormatSnapshot;
+
+    private Integer questionGroupId;
+
+    private String questionGroupTitle;
+
+    private String questionGroupContent;
 
     private List<QuestionOptionResponse> options;
 }

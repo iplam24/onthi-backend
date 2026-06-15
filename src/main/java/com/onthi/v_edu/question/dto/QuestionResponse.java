@@ -31,5 +31,6 @@ public class QuestionResponse {
 	private String sampleAnswer;
 	private String explanation;
 	private LocalDateTime explanationCreatedAt;
+	private Integer questionGroupId;
 }
 
