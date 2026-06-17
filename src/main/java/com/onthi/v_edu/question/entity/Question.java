@@ -43,6 +43,8 @@ public class Question {
 
     @Column(length = 500)
     private String url;
+    @Column(name = "audio_url", length = 500)
+    private String audioUrl;
     @Enumerated(EnumType.STRING)
     private QuestionType type;
     @Enumerated(EnumType.STRING)

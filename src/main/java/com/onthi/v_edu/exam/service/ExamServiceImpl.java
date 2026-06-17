@@ -322,7 +322,7 @@ public class ExamServiceImpl implements ExamService {
 						List<QuestionOptionResponse> options = questionOptionRepository
 								.findByQuestion_IdAndDeletedAtIsNullOrderByIdAsc(question.getId())
 							.stream()
-							.map(option -> new QuestionOptionResponse(option.getId(), option.getContent(), option.getIsCorrect()))
+							.map(option -> new QuestionOptionResponse(option.getId(), option.getContent(), option.getIsCorrect(), option.getImageUrl()))
 							.collect(Collectors.toList());
 
 					return new ExamQuestionItemResponse(
@@ -330,7 +330,8 @@ public class ExamServiceImpl implements ExamService {
 							question.getContent(),
 							question.getContentFormat(),
 							question.getType(),
-							question.getUrl(), // Added
+							question.getUrl(),
+							question.getAudioUrl(),
 							item.getOrderIndex(),
 							item.getScore(),
 							item.getSectionName(),
@@ -417,31 +418,37 @@ public class ExamServiceImpl implements ExamService {
 
 
 	private String resolveUiLayoutHint(String subjectName, List<ExamQuestionItemResponse> questions) {
-		String normalizedSubject = subjectName == null ? "" : subjectName.trim().toLowerCase(Locale.ROOT);
+		String normalizedSubject = subjectName == null ? "" : subjectName.toLowerCase(Locale.ROOT);
+		boolean looksLikeEnglish = normalizedSubject.contains("tiếng anh") || normalizedSubject.contains("english");
 		boolean looksLikeLiterature = normalizedSubject.contains("văn") || normalizedSubject.contains("ngu van") || normalizedSubject.contains("literature");
 
 		boolean hasEssay = false;
 		boolean hasMcq = false;
+		boolean hasListening = false;
+		boolean hasSpeaking = false;
 		for (ExamQuestionItemResponse item : questions) {
 			if (item == null || item.getQuestionType() == null) {
 				continue;
 			}
-			if (item.getQuestionType() == QuestionType.ESSAY) {
-				hasEssay = true;
-			} else if (item.getQuestionType() == QuestionType.MCQ) {
-				hasMcq = true;
+			switch (item.getQuestionType()) {
+				case ESSAY  -> hasEssay = true;
+				case MCQ    -> hasMcq = true;
+				case LISTENING -> hasListening = true;
+				case SPEAKING -> hasSpeaking = true;
 			}
 		}
 
+		if (looksLikeEnglish) {
+			if (hasSpeaking) return "ENGLISH_SPEAKING";
+			if (hasListening) return "ENGLISH_LISTENING";
+			if (hasEssay && hasMcq) return "ENGLISH_MIXED";
+			if (hasEssay) return "ESSAY";
+			return hasMcq ? "STANDARD" : "STANDARD";
+		}
 		if (looksLikeLiterature) {
 			return hasMcq ? "MIXED" : "LITERATURE";
 		}
-		if (hasEssay && hasMcq) {
-			return "MIXED";
-		}
-		if (hasEssay) {
-			return "ESSAY";
-		}
+		if (hasEssay) return "ESSAY";
 		return "STANDARD";
 	}
 

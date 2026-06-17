@@ -33,7 +33,8 @@ public class QuestionOption {
     private String content;
     @Column(name = "is_correct")
     private Boolean isCorrect;
-
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
     @Column(name = "deleted_at")
     private java.time.LocalDateTime deletedAt;
 }

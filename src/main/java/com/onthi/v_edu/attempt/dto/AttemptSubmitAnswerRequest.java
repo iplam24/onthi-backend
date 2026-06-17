@@ -17,5 +17,7 @@ public class AttemptSubmitAnswerRequest {
     private List<Integer> selectedOptionIds;
 
     private String essayAnswer;
+
+    private String audioAnswerUrl;
 }
 

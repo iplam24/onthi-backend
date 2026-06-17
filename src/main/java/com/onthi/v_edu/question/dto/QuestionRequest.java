@@ -23,6 +23,8 @@ public class QuestionRequest {
 
 	private String url;
 
+	private String audioUrl;
+
 	@NotNull(message = "Vui lòng chọn loại câu hỏi")
 	private QuestionType type;
 

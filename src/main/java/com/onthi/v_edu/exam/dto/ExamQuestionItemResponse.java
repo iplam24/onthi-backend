@@ -23,7 +23,9 @@ public class ExamQuestionItemResponse {
 
     private QuestionType questionType;
 
-    private String url; // Added field for image URL
+    private String url; // image URL
+
+    private String audioUrl;
 
     private Integer orderIndex;
 

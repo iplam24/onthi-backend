@@ -46,6 +46,9 @@ public class Answer {
     @Column(name = "essay_answer", columnDefinition = "TEXT")
     private String essayAnswer;
 
+    @Column(name = "audio_answer_url", length = 500)
+    private String audioAnswerUrl;
+
     @Column(name = "is_correct")
     private Boolean isCorrect;
 

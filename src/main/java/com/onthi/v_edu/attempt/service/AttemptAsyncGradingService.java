@@ -102,8 +102,17 @@ public class AttemptAsyncGradingService {
                 String studentAnswerText = "";
                 String correctAnswerText = "";
 
-                if (qType == QuestionType.MCQ) {
-                    // 1. CHẤM ĐIỂM TRẮC NGHIỆM (LOCAL) - KHÔNG GỬI QUA AI
+                if (qType == QuestionType.SPEAKING && (answer.getEssayAnswer() == null || answer.getEssayAnswer().isBlank())) {
+                    answer.setScore(0.0);
+                    answer.setIsCorrect(null);
+                    answer.setAiFeedback("Bạn chưa trả lời câu nói. Hãy bấm \"Bắt đầu nói\" và nói câu trả lời.");
+                    answer.setAiGradingMethod("NO_TRANSCRIPT");
+                    logger.info("[ASYNC GRADING] Câu hỏi SPEAKING (ID: {}) chưa có transcript.", qId);
+                    continue;
+                }
+
+                if (qType == QuestionType.MCQ || (qType == QuestionType.LISTENING && !qOptions.isEmpty())) {
+                    // 1. CHẤM ĐIỂM TRẮC NGHIỆM / LISTENING MCQ (LOCAL) - KHÔNG GỬI QUA AI
                     List<QuestionOption> correctOptions = qOptions.stream()
                             .filter(o -> o.getIsCorrect() != null && o.getIsCorrect())
                             .toList();
@@ -142,7 +151,7 @@ public class AttemptAsyncGradingService {
                     answer.setAiFeedback(isCorrect ? "Đáp án chính xác." : "Đáp án chưa chính xác. Đáp án đúng là: " + correctAnswerText);
                     answer.setAiGradingMethod("Nhận xét của giáo viên");
                     
-                    logger.info("[ASYNC GRADING] Câu hỏi MCQ (ID: {}) chấm LOCAL, không gửi AI.", qId);
+                    logger.info("[ASYNC GRADING] Câu hỏi {} (ID: {}) chấm LOCAL, không gửi AI.", qType, qId);
                     continue; 
                 } else {
                     // 2. CHẤM ĐIỂM TỰ LUẬN

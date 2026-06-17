@@ -25,6 +25,8 @@ public class AttemptAnswerResponse {
 
     private String essayAnswer;
 
+    private String audioAnswerUrl;
+
     private Boolean isCorrect;
 
     private Double score;

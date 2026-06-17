@@ -4,6 +4,7 @@ import com.onthi.v_edu.common.constant.ContentFormat;
 import com.onthi.v_edu.common.constant.DifficultyLevel;
 import com.onthi.v_edu.common.constant.QuestionType;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -15,11 +16,13 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class QuestionResponse {
 	private Integer id;
 	private String content;
 	private ContentFormat contentFormat;
 	private String url;
+	private String audioUrl;
 	private QuestionType type;
 	private DifficultyLevel difficulty;
 	private Integer topicId;
@@ -33,4 +36,3 @@ public class QuestionResponse {
 	private LocalDateTime explanationCreatedAt;
 	private Integer questionGroupId;
 }
-

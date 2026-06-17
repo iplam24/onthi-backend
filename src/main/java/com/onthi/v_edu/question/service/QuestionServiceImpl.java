@@ -161,6 +161,7 @@ public class QuestionServiceImpl implements QuestionService {
 		question.setContent(normalize(request.getContent()));
 		question.setContentFormat(resolveContentFormat(request.getContentFormat()));
 		question.setUrl(normalize(request.getUrl()));
+		question.setAudioUrl(normalize(request.getAudioUrl()));
 		question.setType(request.getType());
 		question.setDifficulty(request.getDifficulty());
 		question.setTopic(topic);
@@ -192,6 +193,7 @@ public class QuestionServiceImpl implements QuestionService {
 		question.setContent(normalize(request.getContent()));
 		question.setContentFormat(resolveContentFormat(request.getContentFormat()));
 		question.setUrl(normalize(request.getUrl()));
+		question.setAudioUrl(normalize(request.getAudioUrl()));
 		question.setType(request.getType());
 		question.setDifficulty(request.getDifficulty());
 		question.setTopic(topic);
@@ -711,6 +713,8 @@ public class QuestionServiceImpl implements QuestionService {
 	}
 
 	private QuestionType parseQuestionType(String val) {
+		if ("LISTENING".equalsIgnoreCase(val)) return QuestionType.LISTENING;
+		if ("SPEAKING".equalsIgnoreCase(val)) return QuestionType.SPEAKING;
 		if ("ESSAY".equalsIgnoreCase(val)) return QuestionType.ESSAY;
 		return QuestionType.MCQ;
 	}
@@ -726,7 +730,7 @@ public class QuestionServiceImpl implements QuestionService {
 		questionOptionRepository.softDeleteByQuestionId(questionId);
 		essayAnswerRepository.softDeleteByQuestionId(questionId);
 
-		if (request.getType() == QuestionType.MCQ) {
+		if (request.getType() == QuestionType.MCQ || request.getType() == QuestionType.LISTENING) {
 			List<OptionRequest> optionRequests = request.getOptions() == null ? Collections.emptyList() : request.getOptions();
 			List<QuestionOption> options = optionRequests.stream()
 					.map(optionRequest -> {
@@ -734,11 +738,14 @@ public class QuestionServiceImpl implements QuestionService {
 						option.setQuestion(question);
 						option.setContent(normalize(optionRequest.getContent()));
 						option.setIsCorrect(optionRequest.getIsCorrect());
+						option.setImageUrl(normalize(optionRequest.getImageUrl()));
 						return option;
 					})
 					.toList();
 			questionOptionRepository.saveAll(options);
-		} else {
+		}
+
+		if (request.getType() == QuestionType.ESSAY || request.getType() == QuestionType.LISTENING) {
 			EssayAnswer essayAnswer = new EssayAnswer();
 			essayAnswer.setQuestion(question);
 			essayAnswer.setSampleAnswer(normalize(request.getSampleAnswer()));
@@ -762,31 +769,43 @@ public class QuestionServiceImpl implements QuestionService {
 	}
 
 	private String validateTypePayload(QuestionRequest request) {
-		if (request.getType() == QuestionType.MCQ) {
+		if (request.getType() == QuestionType.MCQ || request.getType() == QuestionType.LISTENING) {
 			List<OptionRequest> options = request.getOptions() == null ? Collections.emptyList() : request.getOptions();
 			if (options.size() < 2) {
-				return "Câu hỏi MCQ phải có ít nhất 2 đáp án!";
+				// LISTENING có thể là dạng điền từ, cho phép không có options
+				if (request.getType() == QuestionType.LISTENING && options.isEmpty()) {
+					if (isBlank(request.getSampleAnswer())) {
+						return "Câu hỏi LISTENING phải có đáp án (options hoặc sampleAnswer)!";
+					}
+					return null;
+				}
+				return "Câu hỏi MCQ/LISTENING phải có ít nhất 2 đáp án!";
 			}
 
 			long correctCount = options.stream()
 					.filter(option -> Boolean.TRUE.equals(option.getIsCorrect()))
 					.count();
 			if (correctCount == 0) {
-				return "Câu hỏi MCQ phải có ít nhất 1 đáp án đúng!";
+				return "Câu hỏi MCQ/LISTENING phải có ít nhất 1 đáp án đúng!";
 			}
 			return null;
 		}
 
-		if (isBlank(request.getSampleAnswer())) {
-			return "Câu hỏi ESSAY phải có đáp án mẫu!";
+		if (request.getType() == QuestionType.ESSAY) {
+			if (isBlank(request.getSampleAnswer())) {
+				return "Câu hỏi ESSAY phải có đáp án mẫu!";
+			}
+			return null;
 		}
+
+		// SPEAKING không yêu cầu đáp án mẫu bắt buộc
 		return null;
 	}
 
 	private QuestionResponse toQuestionResponse(Question question) {
 		Integer questionId = question.getId();
 		List<OptionResponse> options = questionOptionRepository.findByQuestion_IdAndDeletedAtIsNullOrderByIdAsc(questionId).stream()
-				.map(option -> new OptionResponse(option.getId(), option.getContent(), option.getIsCorrect()))
+				.map(option -> new OptionResponse(option.getId(), option.getContent(), option.getIsCorrect(), option.getImageUrl()))
 				.toList();
 
 		EssayAnswer essayAnswer = essayAnswerRepository.findByQuestion_IdAndDeletedAtIsNull(questionId).orElse(null);
@@ -804,6 +823,7 @@ public class QuestionServiceImpl implements QuestionService {
 				question.getContent(),
 				question.getContentFormat(),
 				question.getUrl(),
+				question.getAudioUrl(),
 				question.getType(),
 				question.getDifficulty(),
 				topicId,

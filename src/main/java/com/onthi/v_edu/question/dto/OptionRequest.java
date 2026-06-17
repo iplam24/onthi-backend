@@ -13,5 +13,7 @@ public class OptionRequest {
 
 	@NotNull(message = "Vui lòng chỉ định đáp án này là đúng hay sai")
 	private Boolean isCorrect;
+
+	private String imageUrl;
 }
 

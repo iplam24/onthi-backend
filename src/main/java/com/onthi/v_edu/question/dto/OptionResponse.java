@@ -13,5 +13,5 @@ public class OptionResponse {
 	private Integer id;
 	private String content;
 	private Boolean isCorrect;
+	private String imageUrl;
 }
-

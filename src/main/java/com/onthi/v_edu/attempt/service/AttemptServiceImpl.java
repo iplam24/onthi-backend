@@ -221,6 +221,7 @@ public class AttemptServiceImpl implements AttemptService {
                 answer.setAttempt(attempt);
                 answer.setQuestion(question);
                 answer.setEssayAnswer(normalize(submitted.getEssayAnswer()));
+                answer.setAudioAnswerUrl(normalize(submitted.getAudioAnswerUrl()));
                 answer.setQuestionSnapshot(question.getContent());
                 answer.setQuestionFormatSnapshot(question.getContentFormat());
                 answer.setCreatedAt(now);
@@ -563,6 +564,7 @@ public class AttemptServiceImpl implements AttemptService {
                             answer.getSelectedOption() != null ? answer.getSelectedOption().getId() : null,
                             selectedOptionIds,
                             answer.getEssayAnswer(),
+                            answer.getAudioAnswerUrl(),
                             answer.getIsCorrect(),
                             answer.getScore(),
                             answer.getAiFeedback(),
