@@ -19,21 +19,25 @@ import java.util.Map;
 public class CommonController {
 
     private final Environment environment;
+    private final com.onthi.v_edu.common.setting.SystemSettingService systemSettingService;
 
     @Value("${spring.application.name:V-Edu}")
-    private String applicationName;
+    private String defaultAppName;
 
     @Value("${app.version:1.0.0}")
-    private String appVersion;
+    private String defaultAppVersion;
 
     @Value("${app.description:V-Edu backend service}")
-    private String appDescription;
+    private String defaultAppDescription;
 
     @Value("${app.environment:development}")
-    private String appEnvironment;
+    private String defaultAppEnvironment;
 
-    public CommonController(Environment environment) {
+    public CommonController(
+            Environment environment,
+            com.onthi.v_edu.common.setting.SystemSettingService systemSettingService) {
         this.environment = environment;
+        this.systemSettingService = systemSettingService;
     }
 
     @GetMapping("/health")
@@ -42,9 +46,9 @@ public class CommonController {
         Runtime runtime = Runtime.getRuntime();
 
         data.put("status", "UP");
-        data.put("application", applicationName);
-        data.put("version", appVersion);
-        data.put("environment", appEnvironment);
+        data.put("application", systemSettingService.getSettingValue("SYSTEM_APP_NAME", defaultAppName));
+        data.put("version", systemSettingService.getSettingValue("SYSTEM_VERSION", defaultAppVersion));
+        data.put("environment", systemSettingService.getSettingValue("SYSTEM_ENVIRONMENT", defaultAppEnvironment));
         data.put("timestamp", Instant.now().toString());
         data.put("uptimeMs", ManagementFactory.getRuntimeMXBean().getUptime());
         data.put("availableProcessors", runtime.availableProcessors());
@@ -64,10 +68,10 @@ public class CommonController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getInfo() {
         Map<String, Object> data = new LinkedHashMap<>();
 
-        data.put("application", applicationName);
-        data.put("description", appDescription);
-        data.put("version", appVersion);
-        data.put("environment", appEnvironment);
+        data.put("application", systemSettingService.getSettingValue("SYSTEM_APP_NAME", defaultAppName));
+        data.put("description", systemSettingService.getSettingValue("SYSTEM_DESCRIPTION", defaultAppDescription));
+        data.put("version", systemSettingService.getSettingValue("SYSTEM_VERSION", defaultAppVersion));
+        data.put("environment", systemSettingService.getSettingValue("SYSTEM_ENVIRONMENT", defaultAppEnvironment));
         data.put("springBootVersion", SpringBootVersion.getVersion());
         data.put("timestamp", Instant.now().toString());
         data.put("activeProfiles", environment.getActiveProfiles());

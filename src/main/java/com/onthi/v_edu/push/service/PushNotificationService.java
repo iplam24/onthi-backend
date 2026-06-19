@@ -15,29 +15,51 @@ import java.security.Security;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PushNotificationService {
 
+    private final PushSubscriptionRepository subscriptionRepository;
+    private final com.onthi.v_edu.common.setting.SystemSettingService systemSettingService;
+    private PushService pushService;
+
     @Value("${app.push.vapid.public-key}")
-    private String publicKey;
+    private String defaultPublicKey;
 
     @Value("${app.push.vapid.private-key}")
-    private String privateKey;
+    private String defaultPrivateKey;
 
     @Value("${app.push.vapid.subject:mailto:admin@v-edu.com}")
-    private String subject;
+    private String defaultSubject;
 
-    private final PushSubscriptionRepository subscriptionRepository;
-    private PushService pushService;
+    public PushNotificationService(
+            PushSubscriptionRepository subscriptionRepository,
+            com.onthi.v_edu.common.setting.SystemSettingService systemSettingService) {
+        this.subscriptionRepository = subscriptionRepository;
+        this.systemSettingService = systemSettingService;
+    }
 
     @PostConstruct
     public void init() {
         try {
             Security.addProvider(new BouncyCastleProvider());
-            pushService = new PushService(publicKey, privateKey, subject);
+            String pub = systemSettingService.getSettingValue("PUSH_VAPID_PUBLIC_KEY", defaultPublicKey);
+            String priv = systemSettingService.getSettingValue("PUSH_VAPID_PRIVATE_KEY", defaultPrivateKey);
+            String sub = systemSettingService.getSettingValue("PUSH_VAPID_SUBJECT", defaultSubject);
+            pushService = new PushService(pub, priv, sub);
         } catch (Exception e) {
             log.error("Failed to initialize PushService: {}", e.getMessage());
+        }
+    }
+
+    private PushService getPushService() {
+        try {
+            String pub = systemSettingService.getSettingValue("PUSH_VAPID_PUBLIC_KEY", defaultPublicKey);
+            String priv = systemSettingService.getSettingValue("PUSH_VAPID_PRIVATE_KEY", defaultPrivateKey);
+            String sub = systemSettingService.getSettingValue("PUSH_VAPID_SUBJECT", defaultSubject);
+            return new PushService(pub, priv, sub);
+        } catch (Exception e) {
+            log.error("Failed to build PushService dynamically, using fallback: {}", e.getMessage());
+            return pushService;
         }
     }
 
@@ -54,7 +76,7 @@ public class PushNotificationService {
                         sub.getAuth(),
                         payload
                 );
-                pushService.send(notification);
+                getPushService().send(notification);
                 log.info("Push notification sent to user {} at endpoint {}", userId, sub.getEndpoint());
             } catch (Exception e) {
                 log.error("Failed to send push notification to {}: {}", sub.getEndpoint(), e.getMessage());

@@ -20,19 +20,32 @@ import java.util.List;
 public class PayOSService {
 
     private static final Logger logger = LoggerFactory.getLogger(PayOSService.class);
-    private final PayOS payOS;
+    private final com.onthi.v_edu.common.setting.SystemSettingService systemSettingService;
 
     @Value("${app.payos.return-url}")
-    private String returnUrl;
+    private String defaultReturnUrl;
 
     @Value("${app.payos.cancel-url}")
-    private String cancelUrl;
+    private String defaultCancelUrl;
 
-    public PayOSService(
-            @Value("${app.payos.client-id}") String clientId,
-            @Value("${app.payos.api-key}") String apiKey,
-            @Value("${app.payos.checksum-key}") String checksumKey) {
-        this.payOS = new PayOS(clientId, apiKey, checksumKey);
+    @Value("${app.payos.client-id}")
+    private String defaultClientId;
+
+    @Value("${app.payos.api-key}")
+    private String defaultApiKey;
+
+    @Value("${app.payos.checksum-key}")
+    private String defaultChecksumKey;
+
+    public PayOSService(com.onthi.v_edu.common.setting.SystemSettingService systemSettingService) {
+        this.systemSettingService = systemSettingService;
+    }
+
+    private PayOS getPayOS() {
+        String clientId = systemSettingService.getSettingValue("PAYOS_CLIENT_ID", defaultClientId);
+        String apiKey = systemSettingService.getSettingValue("PAYOS_API_KEY", defaultApiKey);
+        String checksumKey = systemSettingService.getSettingValue("PAYOS_CHECKSUM_KEY", defaultChecksumKey);
+        return new PayOS(clientId, apiKey, checksumKey);
     }
 
     public CreatePaymentLinkResponse createPaymentLink(Transaction transaction) throws Exception {
@@ -52,21 +65,21 @@ public class PayOSService {
                 .orderCode(transaction.getOrderCode())
                 .amount(transaction.getAmount().longValue())
                 .description(description)
-                .returnUrl(returnUrl)
-                .cancelUrl(cancelUrl)
+                .returnUrl(systemSettingService.getSettingValue("PAYOS_RETURN_URL", defaultReturnUrl))
+                .cancelUrl(systemSettingService.getSettingValue("PAYOS_CANCEL_URL", defaultCancelUrl))
                 .expiredAt(expiredAt)
                 .items(List.of(item))
                 .build();
 
         logger.info("[PayOS] Đang gọi API PayOS để tạo link thanh toán cho OrderCode: {}", transaction.getOrderCode());
-        return payOS.paymentRequests().create(paymentData);
+        return getPayOS().paymentRequests().create(paymentData);
     }
 
     public WebhookData verifyWebhookData(Webhook webhookBody) throws Exception {
-        return payOS.webhooks().verify(webhookBody);
+        return getPayOS().webhooks().verify(webhookBody);
     }
 
     public PaymentLink getPaymentLinkInformation(long orderCode) throws Exception {
-        return payOS.paymentRequests().get(orderCode);
+        return getPayOS().paymentRequests().get(orderCode);
     }
 }

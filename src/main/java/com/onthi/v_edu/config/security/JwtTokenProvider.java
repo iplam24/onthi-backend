@@ -17,11 +17,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class JwtTokenProvider {
 
+    private final com.onthi.v_edu.common.setting.SystemSettingService systemSettingService;
+
     @Value("${app.jwt-secret}")
-    private String jwtSecret;
+    private String defaultJwtSecret;
 
     @Value("${app.jwt-expiration-milliseconds}")
-    private long jwtExpirationDate;
+    private long defaultJwtExpiration;
+
+    public JwtTokenProvider(com.onthi.v_edu.common.setting.SystemSettingService systemSettingService) {
+        this.systemSettingService = systemSettingService;
+    }
 
     // Generate JWT token
     public String generateToken(Authentication authentication) {
@@ -29,8 +35,9 @@ public class JwtTokenProvider {
         List<String> roles = authentication.getAuthorities().stream()
                 .map(authority -> authority.getAuthority())
                 .toList();
+        long expirationMs = systemSettingService.getSettingValueAsLong("JWT_EXPIRATION_MS", defaultJwtExpiration);
         Date currentDate = new Date();
-        Date expireDate = new Date(currentDate.getTime() + jwtExpirationDate);
+        Date expireDate = new Date(currentDate.getTime() + expirationMs);
 
         var builder = Jwts.builder()
                 .setSubject(username)
@@ -50,7 +57,8 @@ public class JwtTokenProvider {
     }
 
     private Key key() {
-        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
+        String secret = systemSettingService.getSettingValue("JWT_SECRET", defaultJwtSecret);
+        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret.trim()));
     }
 
     // Get username from JWT token
