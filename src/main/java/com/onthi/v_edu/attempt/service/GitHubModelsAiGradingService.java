@@ -300,7 +300,13 @@ public class GitHubModelsAiGradingService {
                            - Đánh giá sự hiểu bài thông qua luận điểm và dẫn chứng.
                            - Phải chỉ rõ học sinh làm đúng ý nào, thiếu ý nào.
 
-                        3. PHẢN HỒI TRỰC QUAN (feedback):
+                        3. VỚI CÂU HỎI NÓI (SPEAKING):
+                           - Hãy lưu ý học sinh trả lời bằng giọng nói và được chuyển thành văn bản (STUDENT_ANSWER).
+                           - Đánh giá câu trả lời dựa trên: nội dung truyền tải, từ vựng và cấu trúc ngữ pháp cơ bản.
+                           - Hãy châm chước và bỏ qua các lỗi chính tả hoặc lỗi chia từ rất nhỏ có thể do bộ nhận dạng giọng nói (Speech-to-Text) ghi nhận nhầm (ví dụ: viết hoa/thường, thiếu dấu câu, nhầm từ đồng âm).
+                           - Đưa ra nhận xét mang tính xây dựng về lỗi phát âm tiềm ẩn và gợi ý cách nói tự nhiên hơn.
+
+                        4. PHẢN HỒI TRỰC QUAN (feedback):
                            - Phải RIÊNG BIỆT cho từng câu.
                            - PHẢI có mục **So sánh:** để học sinh thấy sự tương quan giữa câu trả lời của mình và đáp án mẫu.
                            - Ví dụ:

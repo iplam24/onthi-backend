@@ -31,8 +31,14 @@ public class SpeakingAnswerService {
             return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "File audio không được rỗng!");
         }
         String contentType = audioFile.getContentType();
-        if (contentType == null || !contentType.startsWith("audio/")) {
-            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Chỉ hỗ trợ file audio!");
+        boolean isAudio = contentType != null && (
+            contentType.startsWith("audio/") || 
+            contentType.equals("video/webm") || 
+            contentType.equals("video/mp4") || 
+            contentType.equals("application/octet-stream")
+        );
+        if (!isAudio) {
+            return new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), "Chỉ hỗ trợ file audio! Mime type nhận được: " + contentType);
         }
         return fileUpLoadService.uploadFile(audioFile);
     }
