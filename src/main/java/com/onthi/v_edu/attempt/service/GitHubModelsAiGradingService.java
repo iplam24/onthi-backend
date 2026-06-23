@@ -453,17 +453,181 @@ public class GitHubModelsAiGradingService {
         return json.substring(start, end).trim();
     }
 
+    @SuppressWarnings("unchecked")
+    public AiGradingResult gradeSpeakingQuestion(String questionText, String studentAnswerText, String sampleAnswer, double maxScore, String audioAnswerUrl) {
+        if (!aiClientService.isEnabled()) {
+            return new AiGradingResult(0.0, false, "AI Service", "AI Service đang bị tắt.");
+        }
+
+        try {
+            // 1. Đọc file ghi âm cục bộ từ ổ đĩa nếu được cung cấp
+            byte[] audioBytes = null;
+            String mimeType = "audio/webm";
+            if (audioAnswerUrl != null && !audioAnswerUrl.isBlank()) {
+                try {
+                    String relativePath = audioAnswerUrl;
+                    if (audioAnswerUrl.contains("/uploads/")) {
+                        relativePath = audioAnswerUrl.substring(audioAnswerUrl.indexOf("/uploads/") + "/uploads/".length());
+                    }
+                    java.nio.file.Path localPath = java.nio.file.Paths.get("uploads").resolve(relativePath).toAbsolutePath().normalize();
+                    if (java.nio.file.Files.exists(localPath)) {
+                        audioBytes = java.nio.file.Files.readAllBytes(localPath);
+                        String ext = org.springframework.util.StringUtils.getFilenameExtension(localPath.getFileName().toString());
+                        if (ext != null) {
+                            ext = ext.toLowerCase();
+                            if (ext.equals("mp3")) mimeType = "audio/mp3";
+                            else if (ext.equals("wav")) mimeType = "audio/wav";
+                            else if (ext.equals("m4a")) mimeType = "audio/m4a";
+                            else if (ext.equals("webm")) mimeType = "audio/webm";
+                            else if (ext.equals("mp4")) mimeType = "video/mp4";
+                        }
+                        logger.info("[SPEAKING GRADING] Đã đọc file ghi âm local thành công: {} bytes, MIME: {}", audioBytes.length, mimeType);
+                    } else {
+                        logger.warn("[SPEAKING GRADING] File ghi âm không tồn tại ở thư mục local: {}", localPath);
+                    }
+                } catch (Exception e) {
+                    logger.error("[SPEAKING GRADING] Lỗi khi đọc file ghi âm từ đĩa: {}", e.getMessage());
+                }
+            }
+
+            // 2. Xây dựng prompt đánh giá bài nói chuyên sâu
+            String prompt = String.format("""
+                    Bạn là một giáo viên tiếng Anh bản xứ và là giám khảo chấm thi nói IELTS/TOEIC chuyên nghiệp.
+                    Hãy đánh giá bài trả lời nói (Speaking) của học sinh dựa trên câu hỏi và đáp án mẫu được cung cấp dưới đây.
+                    
+                    YÊU CẦU:
+                    1. Đánh giá chi tiết 4 tiêu chí cốt lõi:
+                       - Phát âm (Pronunciation)
+                       - Độ trôi chảy (Fluency)
+                       - Từ vựng (Vocabulary)
+                       - Ngữ pháp (Grammar)
+                    2. Nếu bạn nhận được âm thanh (bạn có khả năng nghe tệp âm thanh đính kèm), hãy phân tích trực tiếp âm thanh để phát hiện các lỗi phát âm, ngữ điệu, ngập ngừng của học sinh. 
+                       Nếu bạn không nhận được âm thanh (hoặc tệp bị lỗi), hãy chấm điểm dựa trên văn bản ghi nhận (STUDENT_TRANSCRIPT) nhưng châm chước các lỗi do bộ nhận dạng giọng nói tự động nhận nhầm.
+                    3. Trả về kết quả đánh giá bằng tiếng Việt và xuất ra định dạng JSON duy nhất.
+                    
+                    =========================
+                    DỮ LIỆU CẦN ĐÁNH GIÁ
+                    =========================
+                    TỐI ĐA ĐIỂM (MAX_SCORE): %.2f
+                    CÂU HỎI (QUESTION): %s
+                    ĐÁP ÁN MẪU (SAMPLE_ANSWER): %s
+                    VĂN BẢN HỌC SINH NÓI (STUDENT_TRANSCRIPT): %s
+                    
+                    =========================
+                    ĐỊNH DẠNG PHẢN HỒI JSON BẮT BUỘC:
+                    =========================
+                    {
+                      "score": number (điểm số học sinh đạt được, tối đa là MAX_SCORE),
+                      "isCorrect": boolean (true nếu điểm đạt >= 50%% số điểm tối đa, ngược lại false),
+                      "transcript": "string (bản dịch text chính xác của những gì học sinh nói trong file âm thanh. Nếu không có âm thanh hoặc không nghe thấy gì, hãy chép lại đúng STUDENT_TRANSCRIPT)",
+                      "fluencyScore": number (0-100),
+                      "pronunciationScore": number (0-100),
+                      "vocabularyScore": number (0-100),
+                      "grammarScore": number (0-100),
+                      "pronunciationDetails": [
+                        {
+                          "word": "từ phát âm chưa chuẩn",
+                          "ipa": "phiên âm đúng quốc tế IPA",
+                          "feedback": "hướng dẫn phát âm đúng"
+                        }
+                      ],
+                      "detailedFeedback": "Nhận xét tổng thể chi tiết bằng tiếng Việt về ưu, nhược điểm và cách cải thiện"
+                    }
+                    
+                    Chỉ trả về JSON hợp lệ, không bao gồm ký tự markdown ```json ở đầu hay cuối.
+                    """, maxScore, questionText, sampleAnswer, studentAnswerText != null ? studentAnswerText : "(Trống)");
+
+            String responseText = null;
+            String systemPrompt = "You are a professional IELTS/TOEIC speaking examiner. Only return a valid JSON object.";
+
+            if (audioBytes != null) {
+                responseText = aiClientService.generateContentWithAudio(prompt, systemPrompt, audioBytes, mimeType);
+            } else {
+                responseText = aiClientService.generateContent(prompt, systemPrompt);
+            }
+
+            if (responseText == null || responseText.isBlank()) {
+                return new AiGradingResult(0.0, false, "Chấm điểm bằng AI", "AI không phản hồi hoặc trả về kết quả rỗng cho bài nói.");
+            }
+
+            // Parse response
+            String cleaned = responseText.replaceAll("```json", "").replaceAll("```", "").trim();
+            ObjectMapper mapper = aiClientService.getObjectMapper();
+            Map<String, Object> map = mapper.readValue(cleaned, Map.class);
+
+            Double score = 0.0;
+            if (map.get("score") instanceof Number) {
+                score = ((Number) map.get("score")).doubleValue();
+            }
+            Boolean isCorrect = false;
+            if (map.get("isCorrect") instanceof Boolean) {
+                isCorrect = (Boolean) map.get("isCorrect");
+            }
+            String aiTranscript = (String) map.get("transcript");
+            if (aiTranscript == null || aiTranscript.isBlank()) {
+                aiTranscript = studentAnswerText;
+            }
+            
+            // Định dạng phản hồi tương thích hoàn hảo với các phân mục hiển thị ở Frontend User PWA (Ưu điểm, Nhược điểm, Gợi ý cải thiện)
+            StringBuilder fb = new StringBuilder();
+            fb.append("Ưu điểm:\n");
+            fb.append(String.format("- Điểm số bài nói đạt: %.2f / %.2f\n", score, maxScore));
+            fb.append(String.format("- Độ trôi chảy (Fluency): %s%%\n", map.getOrDefault("fluencyScore", 0)));
+            fb.append(String.format("- Độ chuẩn phát âm (Pronunciation): %s%%\n", map.getOrDefault("pronunciationScore", 0)));
+            fb.append(String.format("- Vốn từ vựng (Vocabulary): %s%%\n", map.getOrDefault("vocabularyScore", 0)));
+            fb.append(String.format("- Ngữ pháp (Grammar): %s%%\n", map.getOrDefault("grammarScore", 0)));
+            if (aiTranscript != null && !aiTranscript.isBlank()) {
+                fb.append(String.format("- Văn bản nhận dạng (Transcript): \"%s\"\n", aiTranscript));
+            }
+            fb.append("\n");
+
+            List<Map<String, Object>> pDetails = (List<Map<String, Object>>) map.get("pronunciationDetails");
+            if (pDetails != null && !pDetails.isEmpty()) {
+                fb.append("Nhược điểm:\n");
+                fb.append("- Chi tiết một số lỗi phát âm cần khắc phục:\n");
+                for (Map<String, Object> detail : pDetails) {
+                    fb.append(String.format("  + '%s': Phiên âm chuẩn là /%s/ (%s)\n", 
+                            detail.get("word"), 
+                            detail.get("ipa") != null ? detail.get("ipa").toString().replace("/", "") : "", 
+                            detail.get("feedback")));
+                }
+                fb.append("\n");
+            } else {
+                fb.append("Nhược điểm:\n");
+                fb.append("- Không phát hiện lỗi phát âm nào nghiêm trọng.\n\n");
+            }
+
+            fb.append("Gợi ý cải thiện:\n");
+            fb.append(map.getOrDefault("detailedFeedback", "Hãy tiếp tục luyện tập nói tiếng Anh hàng ngày nhé."));
+
+            return new AiGradingResult(score, isCorrect, "Chấm điểm bằng AI (Speaking)", fb.toString(), aiTranscript);
+
+        } catch (Exception e) {
+            logger.error("[SPEAKING GRADING] Lỗi khi chấm điểm câu hỏi nói: {}", e.getMessage(), e);
+            return new AiGradingResult(0.0, false, "Chấm điểm bằng AI (Lỗi)", "Lỗi khi phân tích bài nói bằng AI: " + e.getMessage(), studentAnswerText);
+        }
+    }
+
     public static class AiGradingResult {
         private final Double score;
         private final Boolean isCorrect;
         private final String gradingMethod;
         private final String feedback;
+        private String transcript;
 
         public AiGradingResult(Double score, Boolean isCorrect, String gradingMethod, String feedback) {
             this.score = score;
             this.isCorrect = isCorrect;
             this.gradingMethod = gradingMethod;
             this.feedback = feedback;
+        }
+
+        public AiGradingResult(Double score, Boolean isCorrect, String gradingMethod, String feedback, String transcript) {
+            this.score = score;
+            this.isCorrect = isCorrect;
+            this.gradingMethod = gradingMethod;
+            this.feedback = feedback;
+            this.transcript = transcript;
         }
 
         public Double getScore() {
@@ -482,10 +646,14 @@ public class GitHubModelsAiGradingService {
             return feedback;
         }
 
+        public String getTranscript() {
+            return transcript;
+        }
+
         @Override
         public String toString() {
             return "{score=" + score + ", isCorrect=" + isCorrect + ", method='" + gradingMethod + "', feedback='"
-                    + feedback + "'}";
+                    + feedback + "', transcript='" + transcript + "'}";
         }
     }
 }

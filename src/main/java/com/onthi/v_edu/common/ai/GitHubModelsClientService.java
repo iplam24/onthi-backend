@@ -225,6 +225,97 @@ public class GitHubModelsClientService {
         }
     }
 
+    public String generateContentWithAudio(String prompt, String systemPrompt, byte[] audioBytes, String mimeType) {
+        AiConfig config = aiConfigService.getConfig();
+        if (config == null) {
+            logger.error("[AI CLIENT] AI configuration not loaded");
+            return null;
+        }
+
+        String activeProvider = config.getActiveProvider();
+        logger.info("[AI CLIENT] Routing generateContentWithAudio to provider: {}", activeProvider);
+
+        if ("GEMINI".equalsIgnoreCase(activeProvider)) {
+            return generateContentGeminiWithAudio(prompt, systemPrompt, audioBytes, mimeType, config);
+        } else {
+            logger.info("[AI CLIENT] Provider '{}' does not support native audio. Falling back to text-only prompt.", activeProvider);
+            return generateContent(prompt, systemPrompt);
+        }
+    }
+
+    private String generateContentGeminiWithAudio(String prompt, String systemPrompt, byte[] audioBytes, String mimeType, AiConfig config) {
+        String apiKey = config.getGeminiApiKey();
+        String model = config.getGeminiModel();
+
+        if (apiKey == null || apiKey.isBlank()) {
+            logger.error("[GEMINI API] Gemini API key not configured");
+            return null;
+        }
+
+        try {
+            String activeModel = model != null ? model.trim() : "gemini-1.5-flash";
+            String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", 
+                    activeModel, 
+                    apiKey.trim());
+
+            Map<String, Object> requestBody = new HashMap<>();
+
+            // 1. Text part
+            Map<String, Object> textPart = new HashMap<>();
+            textPart.put("text", prompt);
+
+            // 2. Audio part
+            Map<String, Object> audioPart = new HashMap<>();
+            Map<String, Object> inlineData = new HashMap<>();
+            inlineData.put("mimeType", mimeType != null ? mimeType : "audio/webm");
+            inlineData.put("data", java.util.Base64.getEncoder().encodeToString(audioBytes));
+            audioPart.put("inlineData", inlineData);
+
+            Map<String, Object> contentPart = new HashMap<>();
+            contentPart.put("parts", List.of(textPart, audioPart));
+            contentPart.put("role", "user");
+
+            requestBody.put("contents", List.of(contentPart));
+
+            if (systemPrompt != null && !systemPrompt.isBlank()) {
+                Map<String, Object> sysTextPart = new HashMap<>();
+                sysTextPart.put("text", systemPrompt);
+
+                Map<String, Object> sysInstruction = new HashMap<>();
+                sysInstruction.put("parts", List.of(sysTextPart));
+
+                requestBody.put("systemInstruction", sysInstruction);
+            }
+
+            Map<String, Object> genConfig = new HashMap<>();
+            genConfig.put("temperature", 0.7);
+
+            if (systemPrompt != null && systemPrompt.toLowerCase().contains("json")) {
+                genConfig.put("responseMimeType", "application/json");
+            }
+            requestBody.put("generationConfig", genConfig);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+            logger.info("[GEMINI API] Sending request with audio to Gemini model: {}", activeModel);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
+
+            if (response == null) {
+                logger.error("[GEMINI API] Empty response from Gemini API");
+                return null;
+            }
+
+            return extractGeminiText(response);
+
+        } catch (Exception e) {
+            logger.error("[GEMINI API] Error calling Gemini API with audio: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
     private String generateContentCustomOpenai(String prompt, String systemPrompt, AiConfig config) {
         String apiKey = config.getCustomOpenaiApiKey();
         String model = config.getCustomOpenaiModel();

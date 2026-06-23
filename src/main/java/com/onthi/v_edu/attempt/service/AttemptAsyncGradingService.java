@@ -102,12 +102,44 @@ public class AttemptAsyncGradingService {
                 String studentAnswerText = "";
                 String correctAnswerText = "";
 
-                if (qType == QuestionType.SPEAKING && (answer.getEssayAnswer() == null || answer.getEssayAnswer().isBlank())) {
-                    answer.setScore(0.0);
-                    answer.setIsCorrect(null);
-                    answer.setAiFeedback("Bạn chưa trả lời câu nói. Hãy bấm \"Bắt đầu nói\" và nói câu trả lời.");
-                    answer.setAiGradingMethod("NO_TRANSCRIPT");
-                    logger.info("[ASYNC GRADING] Câu hỏi SPEAKING (ID: {}) chưa có transcript.", qId);
+                if (qType == QuestionType.SPEAKING) {
+                    if ((answer.getEssayAnswer() == null || answer.getEssayAnswer().isBlank()) &&
+                        (answer.getAudioAnswerUrl() == null || answer.getAudioAnswerUrl().isBlank())) {
+                        answer.setScore(0.0);
+                        answer.setIsCorrect(false);
+                        answer.setAiFeedback("Bạn chưa trả lời câu nói. Hãy bấm \"Bắt đầu nói\" để ghi âm câu trả lời.");
+                        answer.setAiGradingMethod("NO_TRANSCRIPT_OR_AUDIO");
+                        logger.info("[ASYNC GRADING] Câu hỏi SPEAKING (ID: {}) chưa có cả transcript và file ghi âm.", qId);
+                        continue;
+                    }
+
+                    EssayAnswer sample = essayAnswerByQuestionId.get(qId);
+                    correctAnswerText = sample != null ? sample.getSampleAnswer() : "(Không có đáp án mẫu)";
+                    answer.setCorrectAnswerSnapshot(correctAnswerText);
+                    studentAnswerText = answer.getEssayAnswer() != null ? answer.getEssayAnswer() : "";
+
+                    String questionText = answer.getQuestionSnapshot();
+                    if (answer.getQuestion() != null && answer.getQuestion().getQuestionGroup() != null) {
+                        questionText = "[Ngữ cảnh / Đoạn văn: " + answer.getQuestion().getQuestionGroup().getContent() + "]\n\n[Câu hỏi: " + questionText + "]";
+                    }
+
+                    logger.info("[ASYNC GRADING] Chấm riêng biệt câu hỏi nói SPEAKING ID: {}", qId);
+                    GitHubModelsAiGradingService.AiGradingResult result = 
+                            gitHubModelsAiGradingService.gradeSpeakingQuestion(
+                                    questionText, 
+                                    studentAnswerText, 
+                                    correctAnswerText, 
+                                    maxScore, 
+                                    answer.getAudioAnswerUrl()
+                            );
+
+                    answer.setScore(result.getScore());
+                    answer.setIsCorrect(result.getIsCorrect());
+                    answer.setAiFeedback(result.getFeedback());
+                    answer.setAiGradingMethod(result.getGradingMethod());
+                    if (result.getTranscript() != null && !result.getTranscript().isBlank()) {
+                        answer.setEssayAnswer(result.getTranscript());
+                    }
                     continue;
                 }
 
